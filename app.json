@@ -1,0 +1,29 @@
+{
+  "expo": {
+    "name": "chronos",
+    "slug": "chronos",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "chronos",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "edgeToEdgeEnabled": true
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-font"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
