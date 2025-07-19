@@ -191,7 +191,9 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingTop: 32,
+    paddingBottom: 10,
     backgroundColor: "#142850",
     borderBottomWidth: 1,
     borderBottomColor: "#1A2A4F",
@@ -202,9 +204,11 @@ const styles = StyleSheet.create({
     marginRight: 4,
   },
   headerTitleYellow: {
-    fontSize: 20,
-    fontWeight: "700",
+    fontSize: 22,
+    fontWeight: "bold",
     color: "#F4C542",
+    textAlign: "center",
+    flex: 1,
   },
   helpButton: {
     padding: 8,

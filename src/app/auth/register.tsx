@@ -3,6 +3,7 @@ import { View, Text, TextInput, StyleSheet, TouchableOpacity, Alert, Modal } fro
 import { ButtonLogin } from "../../components/ButtonLogin";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { saveUserType } from "../../utils/userType";
 
 interface RegisterForm {
   nome: string;
@@ -24,6 +25,8 @@ export default function Register() {
     confirmarSenha: ""
   });
   const [showFuncaoModal, setShowFuncaoModal] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const funcoes = ["Terceirizado", "Chefe de Obra"];
 
@@ -53,13 +56,20 @@ export default function Register() {
       return;
     }
 
+    // Salvar o tipo de usuário para uso no login
+    console.log("Salvando tipo de usuário:", formData.funcao, "para email:", formData.email);
+    saveUserType(formData.email, formData.funcao);
+    
     Alert.alert(
       "Sucesso",
       "Conta criada com sucesso!",
       [
         {
           text: "OK",
-          onPress: () => router.replace("/")
+          onPress: () => {
+            console.log("Redirecionando para login após cadastro");
+            router.replace("/");
+          }
         }
       ]
     );
@@ -137,23 +147,47 @@ export default function Register() {
           <Ionicons name="chevron-down" size={20} color="#B0B3C7" />
         </TouchableOpacity>
 
-        <TextInput
-          placeholder="Senha"
-          placeholderTextColor="#B0B3C7"
-          secureTextEntry
-          value={formData.senha}
-          onChangeText={(value) => updateFormData('senha', value)}
-          style={styles.input}
-        />
+        <View style={styles.inputContainer}>
+          <TextInput
+            placeholder="Senha"
+            placeholderTextColor="#B0B3C7"
+            secureTextEntry={!showPassword}
+            value={formData.senha}
+            onChangeText={(value) => updateFormData('senha', value)}
+            style={styles.input}
+          />
+          <TouchableOpacity
+            style={styles.eyeIcon}
+            onPress={() => setShowPassword(!showPassword)}
+          >
+            <Ionicons
+              name={showPassword ? "eye-off" : "eye"}
+              size={20}
+              color="#B0B3C7"
+            />
+          </TouchableOpacity>
+        </View>
 
-        <TextInput
-          placeholder="Confirmar senha"
-          placeholderTextColor="#B0B3C7"
-          secureTextEntry
-          value={formData.confirmarSenha}
-          onChangeText={(value) => updateFormData('confirmarSenha', value)}
-          style={styles.input}
-        />
+        <View style={styles.inputContainer}>
+          <TextInput
+            placeholder="Confirmar senha"
+            placeholderTextColor="#B0B3C7"
+            secureTextEntry={!showConfirmPassword}
+            value={formData.confirmarSenha}
+            onChangeText={(value) => updateFormData('confirmarSenha', value)}
+            style={styles.input}
+          />
+          <TouchableOpacity
+            style={styles.eyeIcon}
+            onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+          >
+            <Ionicons
+              name={showConfirmPassword ? "eye-off" : "eye"}
+              size={20}
+              color="#B0B3C7"
+            />
+          </TouchableOpacity>
+        </View>
 
         <View style={styles.buttonContainer}>
           <ButtonLogin
@@ -274,15 +308,24 @@ const styles = StyleSheet.create({
     gap: 16,
     marginBottom: 20,
   },
+  inputContainer: {
+    position: "relative",
+  },
   input: {
     backgroundColor: "#142850",
     borderColor: "#1A2A4F",
     borderWidth: 1,
     borderRadius: 8,
     paddingHorizontal: 16,
+    paddingRight: 50,
     height: 56,
     fontSize: 16,
     color: "#FFFFFF",
+  },
+  eyeIcon: {
+    position: "absolute",
+    right: 16,
+    top: 18,
   },
   selectInput: {
     backgroundColor: "#142850",

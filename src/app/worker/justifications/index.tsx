@@ -13,7 +13,7 @@ const JUSTIFICATION_TYPES = [
 
 export default function JustificationTypeScreen() {
   const handleSelect = (type: typeof JUSTIFICATION_TYPES[0]) => {
-    router.push({ pathname: "/justifications/detail", params: { type: type.id } });
+    router.push({ pathname: "/worker/justifications/detail", params: { type: type.id } });
   };
 
   return (
@@ -43,7 +43,7 @@ export default function JustificationTypeScreen() {
       />
       {/* Ajuda Sênior */}
       <View style={styles.actionsSection}>
-        <TouchableOpacity style={styles.actionButton} onPress={() => router.push("/justifications/help")}> 
+        <TouchableOpacity style={styles.actionButton} onPress={() => router.push("/help" as any)}> 
           <Ionicons name="help-circle-outline" size={24} color="#F4C542" />
           <Text style={styles.actionButtonText}>Ajuda</Text>
         </TouchableOpacity>

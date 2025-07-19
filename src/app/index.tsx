@@ -2,10 +2,13 @@ import React, { useState } from "react";
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, Alert } from "react-native";
 import { ButtonLogin } from "../components/ButtonLogin";
 import { router } from "expo-router";
+import { getUserType, saveUserType } from "../utils/userType";
+import { Ionicons } from "@expo/vector-icons";
 
 export default function SignIn() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleLogin = () => {
     if (!email.trim() || !password.trim()) {
@@ -19,8 +22,24 @@ export default function SignIn() {
       return;
     }
 
-    console.log("Login com:", email, password);
-    router.replace("/home");
+    const userType = getUserType(email);
+    
+    if (userType === "Chefe de Obra") {
+      router.replace("/manager/home" as any);
+    } else if (userType === "Terceirizado") {
+      router.replace("/worker/home" as any);
+    } else {
+      const isManager = email.includes('manager') || email.includes('chefe') || email.includes('admin') || email.includes('gerente');
+      const isWorker = email.includes('worker') || email.includes('terceirizado') || email.includes('funcionario') || email.includes('operario');
+      
+      if (isManager) {
+        router.replace("/manager/home" as any);
+      } else if (isWorker) {
+        router.replace("/worker/home" as any);
+      } else {
+        router.replace("/manager/home" as any);
+      }
+    }
   };
 
   return (
@@ -40,14 +59,26 @@ export default function SignIn() {
           onChangeText={setEmail}
         />
 
-        <TextInput
-          placeholder="Senha"
-          placeholderTextColor="#B0B3C7"
-          secureTextEntry
-          style={styles.input}
-          value={password}
-          onChangeText={setPassword}
-        />
+        <View style={styles.inputContainer}>
+          <TextInput
+            placeholder="Senha"
+            placeholderTextColor="#B0B3C7"
+            secureTextEntry={!showPassword}
+            style={styles.input}
+            value={password}
+            onChangeText={setPassword}
+          />
+          <TouchableOpacity
+            style={styles.eyeIcon}
+            onPress={() => setShowPassword(!showPassword)}
+          >
+            <Ionicons
+              name={showPassword ? "eye-off" : "eye"}
+              size={20}
+              color="#B0B3C7"
+            />
+          </TouchableOpacity>
+        </View>
 
         <TouchableOpacity 
           style={styles.forgotPasswordContainer}
@@ -106,15 +137,24 @@ const styles = StyleSheet.create({
     gap: 16,
     marginBottom: 20,
   },
+  inputContainer: {
+    position: "relative",
+  },
   input: {
     backgroundColor: "#142850",
     borderColor: "#1A2A4F",
     borderWidth: 1,
     borderRadius: 8,
     paddingHorizontal: 16,
+    paddingRight: 50,
     height: 56,
     fontSize: 16,
     color: "#FFFFFF",
+  },
+  eyeIcon: {
+    position: "absolute",
+    right: 16,
+    top: 18,
   },
   forgotPasswordContainer: {
     alignSelf: "flex-end",

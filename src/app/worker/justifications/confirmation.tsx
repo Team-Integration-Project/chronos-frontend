@@ -23,13 +23,13 @@ export default function JustificationConfirmationScreen() {
         <Text style={styles.desc}>
           Sua justificativa de <Text style={styles.bold}>{typeInfo.title}</Text> foi enviada com sucesso.
         </Text>
-        <TouchableOpacity style={styles.btn} onPress={() => router.replace("/home")}
+        <TouchableOpacity style={styles.btn} onPress={() => router.replace("/worker/home")}
           activeOpacity={0.85}>
           <Ionicons name="home-outline" size={20} color="#0A1F44" style={{ marginRight: 6 }} />
           <Text style={styles.btnText}>Voltar para o início</Text>
         </TouchableOpacity>
         <View style={styles.actionsSection}>
-          <TouchableOpacity style={styles.actionButton} onPress={() => router.push("/justifications/help")}> 
+          <TouchableOpacity style={styles.actionButton} onPress={() => router.push("/help" as any)}> 
             <Ionicons name="help-circle-outline" size={24} color="#F4C542" />
             <Text style={styles.actionButtonText}>Ajuda</Text>
           </TouchableOpacity>
