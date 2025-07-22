@@ -107,19 +107,32 @@ npm start
 chronos/
 ├── src/
 │   ├── app/
-│   │   ├── home/                   # Home screen
-│   │   ├── profile/                # User profile
-│   │   ├── reports/                # Attendance reports
-│   │   ├── justifications/         # Employee justification system
-│   │   ├── manager-justifications/ # Manager justification dashboard
-│   │   └── help/                   # Help center screens
+│   │   ├── auth/                    # Telas de autenticação (authentication screens)
+│   │   ├── help/                    # Central de ajuda (help center)
+│   │   ├── manager/                 # Fluxo do Chefe de Obra (manager flow)
+│   │   │   ├── home/                # Home do manager (manager home)
+│   │   │   ├── reports/             # Relatórios de funcionários (employee reports)
+│   │   │   ├── manager-justifications/ # Justificativas recebidas (received justifications)
+│   │   │   ├── profile/             # Perfil do manager (manager profile)
+│   │   │   └── clock-in/            # Reconhecimento facial para ponto (clock-in facial recognition)
+│   │   ├── worker/                  # Fluxo do Terceirizado (worker flow)
+│   │   │   ├── home/                # Home do worker (worker home)
+│   │   │   ├── reports/             # Relatório pessoal do worker (worker personal report)
+│   │   │   ├── justifications/      # Envio de justificativas (send justifications)
+│   │   │   └── profile/             # Perfil do worker (worker profile)
+│   │   └── index.tsx                # Tela de login (login screen)
 │   ├── components/
-│   │   ├── Help/                   # Help components
-│   │   └── ButtonLogin/           # Login button UI
-│   └── assets/                     # Images and fonts
+│   │   ├── ButtonLogin/             # Botão de login/ação (login/action button)
+│   │   ├── Help/                    # Componentes de ajuda (help components)
+│   │   ├── FacialRecognitionRegister/ # Reconhecimento facial para cadastro (facial recognition for registration)
+│   │   └── FacialRecognitionClockIn/  # Reconhecimento facial para ponto (facial recognition for clock-in)
+│   └── assets/
+│       ├── images/                  # Imagens e ícones (images and icons)
+│       └── fonts/                   # Fontes customizadas (custom fonts)
 ├── package.json
 ├── app.json
-└── tsconfig.json
+├── tsconfig.json
+└── babel.config.js
 ```
 
 ---
