@@ -14,11 +14,72 @@ export default function ReportIndividualScreen() {
   const params = useLocalSearchParams();
   const name = params.name || "Funcionário";
   const [period, setPeriod] = useState("mes");
+  
+  const mockDataByPeriod = {
+    hoje: [
+      { id: "1", date: "15/12/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
+    ],
+    semana: [
+      { id: "1", date: "09/12/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
+      { id: "2", date: "10/12/2024", entrada: "08:15", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Atraso", observacao: "Atraso de 15 min" },
+      { id: "3", date: "11/12/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
+      { id: "4", date: "12/12/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
+      { id: "5", date: "13/12/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
+    ],
+    mes: [
+      { id: "1", date: "01/12/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
+      { id: "2", date: "02/12/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
+      { id: "3", date: "03/12/2024", entrada: "08:15", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Atraso", observacao: "Atraso de 15 min" },
+      { id: "4", date: "04/12/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
+      { id: "5", date: "05/12/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
+      { id: "6", date: "06/12/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
+      { id: "7", date: "07/12/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
+      { id: "8", date: "08/12/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
+      { id: "9", date: "09/12/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
+      { id: "10", date: "10/12/2024", entrada: "08:15", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Atraso", observacao: "Atraso de 15 min" },
+      { id: "11", date: "11/12/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
+      { id: "12", date: "12/12/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
+      { id: "13", date: "13/12/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
+      { id: "14", date: "14/12/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
+      { id: "15", date: "15/12/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
+    ],
+    ano: [
+      { id: "1", date: "01/01/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
+      { id: "2", date: "01/02/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
+      { id: "3", date: "01/03/2024", entrada: "08:15", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Atraso", observacao: "Atraso de 15 min" },
+      { id: "4", date: "01/04/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
+      { id: "5", date: "01/05/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
+      { id: "6", date: "01/06/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
+      { id: "7", date: "01/07/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
+      { id: "8", date: "01/08/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
+      { id: "9", date: "01/09/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
+      { id: "10", date: "01/10/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
+      { id: "11", date: "01/11/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
+      { id: "12", date: "01/12/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
+    ]
+  };
 
-  const totalHoras = 160;
-  const totalFaltas = 1;
-  const totalAtrasos = 2;
-  const totalJustificativas = 1;
+  // Obter dados baseado no período selecionado
+  const currentReports = mockDataByPeriod[period as keyof typeof mockDataByPeriod] || mockDataByPeriod.mes;
+  
+  // Calcular estatísticas baseadas no período selecionado
+  const calculateStats = () => {
+    const totalDays = currentReports.length;
+    const approvedDays = currentReports.filter(r => r.status === "Aprovado").length;
+    const lateDays = currentReports.filter(r => r.status === "Atraso").length;
+    const totalHours = totalDays * 8; 
+    
+    return {
+      totalHoras: totalHours,
+      totalFaltas: totalDays - approvedDays - lateDays,
+      totalAtrasos: lateDays,
+      totalJustificativas: 0 
+    };
+  };
+
+  const stats = calculateStats();
+
+
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -30,10 +91,10 @@ export default function ReportIndividualScreen() {
         <View style={{ width: 40 }} />
       </View>
       <View style={styles.summaryRow}>
-        <SummaryCard label="Horas" value={totalHoras} color="#4CAF50" icon="time-outline" />
-        <SummaryCard label="Faltas" value={totalFaltas} color="#FF6B6B" icon="close-circle-outline" />
-        <SummaryCard label="Atrasos" value={totalAtrasos} color="#F4C542" icon="alert-circle-outline" />
-        <SummaryCard label="Justificativas" value={totalJustificativas} color="#F4C542" icon="document-text-outline" />
+        <SummaryCard label="Horas" value={stats.totalHoras} color="#4CAF50" icon="time-outline" />
+        <SummaryCard label="Faltas" value={stats.totalFaltas} color="#FF6B6B" icon="close-circle-outline" />
+        <SummaryCard label="Atrasos" value={stats.totalAtrasos} color="#F4C542" icon="alert-circle-outline" />
+        <SummaryCard label="Justificativas" value={stats.totalJustificativas} color="#F4C542" icon="document-text-outline" />
       </View>
       <View style={styles.filtersSection}>
         <Text style={styles.filterLabel}>Período:</Text>
@@ -41,6 +102,7 @@ export default function ReportIndividualScreen() {
           <FilterBtn label="Hoje" active={period === "hoje"} onPress={() => setPeriod("hoje")} />
           <FilterBtn label="Semana" active={period === "semana"} onPress={() => setPeriod("semana")} />
           <FilterBtn label="Mês" active={period === "mes"} onPress={() => setPeriod("mes")} />
+          <FilterBtn label="Ano" active={period === "ano"} onPress={() => setPeriod("ano")} />
         </View>
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={true} style={{ marginHorizontal: 12, marginTop: 10 }} contentContainerStyle={{ minWidth: 1100, paddingBottom: 32 }}>
@@ -57,7 +119,7 @@ export default function ReportIndividualScreen() {
             <Text style={[styles.tableCell, { minWidth: 110 }]}>Status</Text>
             <Text style={[styles.tableCell, { minWidth: 180 }]}>Observação</Text>
           </View>
-          {MOCK_REPORTS.map((r, idx) => (
+          {currentReports.map((r, idx) => (
             <View key={r.id} style={[styles.tableRow, idx % 2 === 0 && styles.tableRowAlt]}>
               <Text style={[styles.tableCell, { minWidth: 100 }]}>{r.date}</Text>
               <Text style={[styles.tableCell, { minWidth: 90 }]}>{r.entrada}</Text>

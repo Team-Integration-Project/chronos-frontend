@@ -5,7 +5,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   SafeAreaView,
-  Linking,
   ActivityIndicator,
   Dimensions,
 } from "react-native";
@@ -15,13 +14,10 @@ import { Href, router } from "expo-router";
 const { width } = Dimensions.get("window");
 
 const ACTIONS = [
-  { id: "1", title: "Relatórios", icon: "document-text-outline", route: "/reports" },
-  { id: "2", title: "Justificativas", icon: "person-remove-outline", route: "/manager-justifications" },
-  { id: "3", title: "Bater Ponto", icon: "scan-circle-outline", route: "/clock-in" },
-  { id: "4", title: "Perfil", icon: "person-circle-outline", route: "/profile" },
+  { id: "1", title: "Justificativas", icon: "document-text-outline", route: "/worker/justifications" },
+  { id: "2", title: "Meu Relatório", icon: "document-outline", route: "/worker/reports" },
+  { id: "3", title: "Perfil", icon: "person-circle-outline", route: "/worker/profile" },
 ];
-
-const SUPPORT_EMAIL = "mailto:suporte@chronos.com";
 
 const userService = {
   getCurrentUser: (): Promise<{ name: string }> =>
@@ -31,7 +27,7 @@ const authService = {
   logout: (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 400)),
 };
 
-export default function HomeScreen() {
+export default function WorkerHomeScreen() {
   const [user, setUser] = useState<{ name: string } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -83,7 +79,6 @@ export default function HomeScreen() {
         </View>
         <View style={styles.gridRow}>
           <ActionButton {...ACTIONS[2]} />
-          <ActionButton {...ACTIONS[3]} />
         </View>
       </View>
 
@@ -99,7 +94,7 @@ export default function HomeScreen() {
 
 function ActionButton({ title, icon, route }: { title: string; icon: any; route: string }) {
   return (
-<TouchableOpacity style={styles.actionBtn} onPress={() => router.push(route as Href)} activeOpacity={0.85}>
+    <TouchableOpacity style={styles.actionBtn} onPress={() => router.push(route as Href)} activeOpacity={0.85}>
       <View style={styles.actionIconWrap}>
         <Ionicons name={icon} size={32} color="#F4C542" />
       </View>
@@ -194,29 +189,10 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     textAlign: "center",
   },
-  helpArea: {
-    alignItems: "center",
-    marginTop: 40,
-    marginBottom: 20,
-  },
-  helpContainer: {
-    alignItems: "center",
-  },
-  helpText: {
-    color: "#B0B3C7",
-    fontSize: 14,
-    textAlign: "center",
-  },
-  helpLink: {
-    color: "#F4C542",
-    fontWeight: "bold",
-    textDecorationLine: "underline",
-  },
   bottomActions: {
     alignItems: "center",
     marginTop: 40,
     marginBottom: 20,
-    gap: 16,
   },
   actionButton: {
     flexDirection: "row",
@@ -238,4 +214,4 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginLeft: 10,
   },
-});
+}); 

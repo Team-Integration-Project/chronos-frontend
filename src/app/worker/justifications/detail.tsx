@@ -26,7 +26,7 @@ export default function JustificationDetailScreen() {
     setSubmitting(true);
     setTimeout(() => {
       setSubmitting(false);
-      router.replace({ pathname: "/justifications/confirmation", params: { type } });
+      router.replace({ pathname: "/worker/justifications/confirmation", params: { type } });
     }, 1200);
   };
 
@@ -58,7 +58,7 @@ export default function JustificationDetailScreen() {
           <Text style={styles.submitBtnText}>{submitting ? "Enviando..." : "Enviar justificativa"}</Text>
         </TouchableOpacity>
         <View style={styles.actionsSection}>
-          <TouchableOpacity style={styles.actionButton} onPress={() => router.push("/justifications/help")}> 
+          <TouchableOpacity style={styles.actionButton} onPress={() => router.push("/help" as any)}> 
             <Ionicons name="help-circle-outline" size={24} color="#F4C542" />
             <Text style={styles.actionButtonText}>Ajuda</Text>
           </TouchableOpacity>

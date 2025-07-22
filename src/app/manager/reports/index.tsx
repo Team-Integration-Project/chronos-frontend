@@ -3,7 +3,6 @@ import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, Dim
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 
-// MOCK: importar lista de funcionários do perfil futuramente
 const MOCK_USERS = [
   { id: "1", name: "Maria Santos" },
   { id: "2", name: "Pedro Costa" },
@@ -32,7 +31,7 @@ export default function ReportsScreen() {
               key={emp.id}
               style={styles.card}
               activeOpacity={0.85}
-              onPress={() => router.push({ pathname: "/reports/[id]", params: { id: emp.id, name: emp.name } })}
+              onPress={() => router.push({ pathname: "/manager/reports/[id]", params: { id: emp.id, name: emp.name } })}
             >
               <Text style={styles.name}>{emp.name}</Text>
               <View style={styles.eyeBtn}>

@@ -29,7 +29,7 @@ export default function ForgotPassword() {
         [
           {
             text: "OK",
-            onPress: () => router.replace("/")
+            onPress: () => router.push("/auth/reset-password")
           }
         ]
       );

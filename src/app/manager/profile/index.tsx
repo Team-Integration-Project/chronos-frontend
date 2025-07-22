@@ -215,14 +215,15 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color="#F4C542" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Perfil do Usuário</Text>
+        <View style={{ width: 40 }} />
+      </View>
+
       <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#F4C542" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Perfil do Usuário</Text>
-          <View style={{ width: 40 }} />
-        </View>
 
         <View style={styles.profileCard}>
           <View style={styles.avatar}>
@@ -344,10 +345,13 @@ export default function ProfileScreen() {
           />
         </View>
 
-        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-          <Ionicons name="log-out-outline" size={20} color="#F44336" style={{ marginRight: 8 }} />
-          <Text style={[styles.logoutText, { color: '#F44336' }]}>Sair</Text>
-        </TouchableOpacity>
+        <View style={styles.section}>
+          <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+            <Ionicons name="log-out-outline" size={20} color="#F44336" style={{ marginRight: 8 }} />
+            <Text style={[styles.logoutText, { color: '#F44336' }]}>Sair</Text>
+          </TouchableOpacity>
+        </View>
+
       </ScrollView>
 
       <Modal
@@ -627,9 +631,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingTop: 20,
-    paddingBottom: 10,
     paddingHorizontal: 16,
+    paddingTop: 32,
+    paddingBottom: 10,
     backgroundColor: "#0A1F44",
   },
   backButton: {
@@ -641,6 +645,8 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     fontSize: 22,
     letterSpacing: 1.1,
+    textAlign: "center",
+    flex: 1,
   },
   profileCard: {
     alignItems: "center",
@@ -765,8 +771,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: "#142850",
     borderRadius: 12,
-    paddingVertical: 12,
-    margin: 24,
+    paddingVertical: 16,
   },
   logoutText: {
     color: "#F4C542",
