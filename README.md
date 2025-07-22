@@ -190,6 +190,3 @@ For help, suggestions, or bug reports:
 This project is licensed under the **MIT License**.
 See the [LICENSE](./LICENSE) file for full details.
 
----
-
-Made with ❤️ by the Chronos Team
