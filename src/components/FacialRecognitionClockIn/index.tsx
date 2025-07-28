@@ -1,42 +1,66 @@
-import React, { useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Dimensions } from "react-native";
-import { ButtonLogin } from "../ButtonLogin";
+import React, { useState, useEffect, useRef } from "react";
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Dimensions, Linking } from "react-native";
+import { CameraView, useCameraPermissions } from "expo-camera";
+import { ButtonLogin } from "../ButtonLogin"; // Ajuste o caminho se necessário
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 const { width, height } = Dimensions.get("window");
 
 export default function FacialRecognitionClockIn() {
+  const cameraRef = useRef<any>(null); // Ajustado para 'any' temporariamente
+  const [permission, requestPermission] = useCameraPermissions();
   const [isScanning, setIsScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
   const [clockInType, setClockInType] = useState<"entrada" | "saida" | null>(null);
   const [faceDetected, setFaceDetected] = useState(false);
   const [employeeData, setEmployeeData] = useState<any>(null);
 
-  const handleStartScan = (type: "entrada" | "saida") => {
+  useEffect(() => {
+    if (!permission) {
+      requestPermission();
+    }
+  }, [permission, requestPermission]);
+
+  const handleStartScan = async (type: "entrada" | "saida") => {
+    if (!permission?.granted || !cameraRef.current) {
+      Alert.alert("Erro", "Permissão de câmera não concedida.", [
+        { text: "Abrir Configurações", onPress: () => Linking.openSettings() },
+        { text: "OK" },
+      ]);
+      return;
+    }
+
     setClockInType(type);
     setIsScanning(true);
     setScanProgress(0);
     setFaceDetected(false);
     setEmployeeData(null);
-    
-    setTimeout(() => {
-      setFaceDetected(true);
-      setEmployeeData({
-        nome: "João Silva",
-        cpf: "123.456.789-00",
-        funcao: "Chefe de Obra",
-        matricula: "2024001",
-        empresa: "Construtora ABC Ltda"
-      });
-    }, 2000);
-    
+
+    try {
+      const photo = await cameraRef.current.takePhotoAsync({ base64: true });
+      console.log("Foto capturada:", photo.uri);
+      setTimeout(() => {
+        setFaceDetected(true);
+        setEmployeeData({
+          nome: "João Silva",
+          cpf: "123.456.789-00",
+          funcao: "Chefe de Obra",
+          matricula: "2024001",
+          empresa: "Construtora ABC Ltda",
+        });
+      }, 2000);
+    } catch (error) {
+      Alert.alert("Erro", "Falha ao capturar a foto.");
+      setIsScanning(false);
+    }
+
     const interval = setInterval(() => {
-      setScanProgress(prev => {
+      setScanProgress((prev) => {
         if (prev >= 100) {
           clearInterval(interval);
           setIsScanning(false);
-          handleScanComplete(type);
+          if (faceDetected) handleScanComplete(type);
           return 100;
         }
         return prev + 10;
@@ -48,9 +72,8 @@ export default function FacialRecognitionClockIn() {
     const currentTime = new Date().toLocaleTimeString("pt-BR", {
       hour: "2-digit",
       minute: "2-digit",
-      second: "2-digit"
+      second: "2-digit",
     });
-
     const currentDate = new Date().toLocaleDateString("pt-BR");
 
     Alert.alert(
@@ -62,8 +85,8 @@ export default function FacialRecognitionClockIn() {
           onPress: () => {
             console.log(`Ponto ${type} registrado: ${currentDate} ${currentTime}`);
             router.replace("/manager/home");
-          }
-        }
+          },
+        },
       ]
     );
   };
@@ -71,6 +94,27 @@ export default function FacialRecognitionClockIn() {
   const handleBackToHome = () => {
     router.back();
   };
+
+  if (!permission) {
+    return <View style={styles.container} />;
+  }
+
+  if (!permission.granted) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.message}>Precisamos da sua permissão para usar a câmera</Text>
+        <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
+          <Text style={styles.permissionText}>Conceder Permissão</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.permissionButton, { marginTop: 10 }]}
+          onPress={() => Linking.openSettings()}
+        >
+          <Text style={styles.permissionText}>Abrir Configurações</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -107,23 +151,12 @@ export default function FacialRecognitionClockIn() {
       )}
 
       <View style={styles.scanArea}>
-        <View style={styles.cameraFrame}>
-          {isScanning ? (
-            <View style={styles.scanningContainer}>
-              <Ionicons name="scan-outline" size={50} color="#F4C542" />
-              <Text style={styles.scanningText}>Escaneando...</Text>
-              <View style={styles.progressBar}>
-                <View style={[styles.progressFill, { width: `${scanProgress}%` }]} />
-              </View>
-              <Text style={styles.progressText}>{scanProgress}%</Text>
-            </View>
-          ) : (
-            <View style={styles.placeholderContainer}>
-              <Ionicons name="camera-outline" size={60} color="#B0B3C7" />
-              <Text style={styles.placeholderText}>Área da Câmera</Text>
-            </View>
-          )}
-        </View>
+        <CameraView
+          ref={cameraRef}
+          style={styles.cameraFrame}
+          facing="front"
+          ratio="4:3"
+        />
       </View>
 
       <View style={styles.instructionsContainer}>
@@ -183,6 +216,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 16,
     paddingBottom: 24,
+  },
+  message: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    textAlign: "center",
+    marginBottom: 10,
+  },
+  permissionButton: {
+    backgroundColor: "#F4C542",
+    padding: 10,
+    borderRadius: 8,
+    alignItems: "center",
+    marginTop: 5,
+  },
+  permissionText: {
+    color: "#0A1F44",
+    fontSize: 16,
+    fontWeight: "600",
   },
   header: {
     flexDirection: "row",
@@ -252,50 +303,10 @@ const styles = StyleSheet.create({
   cameraFrame: {
     width: width * 0.8,
     height: width * 0.6,
-    backgroundColor: "#142850",
     borderRadius: 16,
     borderWidth: 2,
     borderColor: "#F4C542",
-    justifyContent: "center",
-    alignItems: "center",
     overflow: "hidden",
-  },
-  scanningContainer: {
-    alignItems: "center",
-    padding: 16,
-  },
-  scanningText: {
-    color: "#F4C542",
-    fontSize: 16,
-    fontWeight: "600",
-    marginTop: 8,
-    marginBottom: 16,
-  },
-  progressBar: {
-    width: "100%",
-    height: 6,
-    backgroundColor: "#1A2A4F",
-    borderRadius: 4,
-    marginBottom: 8,
-  },
-  progressFill: {
-    height: "100%",
-    backgroundColor: "#F4C542",
-    borderRadius: 4,
-  },
-  progressText: {
-    color: "#F4C542",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  placeholderContainer: {
-    alignItems: "center",
-    padding: 16,
-  },
-  placeholderText: {
-    color: "#B0B3C7",
-    fontSize: 14,
-    marginTop: 8,
   },
   instructionsContainer: {
     backgroundColor: "#142850",
@@ -344,4 +355,4 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginLeft: 8,
   },
-}); 
+});

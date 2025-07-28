@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Dimensions } from "react-native";
-import { ButtonLogin } from "../ButtonLogin";
+import React, { useState, useEffect, useRef } from "react";
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Dimensions, Linking } from "react-native";
+import { CameraView, useCameraPermissions } from "expo-camera";
+import { ButtonLogin } from "../ButtonLogin"; // Ajuste o caminho se necessário
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { saveUserType } from "../../utils/userType";
@@ -17,35 +18,18 @@ interface UserData {
 }
 
 export default function FacialRecognitionRegister() {
+  const cameraRef = useRef<any>(null); // Ajustado para 'any' temporariamente
+  const [permission, requestPermission] = useCameraPermissions();
   const [isScanning, setIsScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
   const [userData, setUserData] = useState<UserData | null>(null);
   const [faceDetected, setFaceDetected] = useState(false);
   const params = useLocalSearchParams();
 
-  const handleStartScan = () => {
-    setIsScanning(true);
-    setScanProgress(0);
-    setFaceDetected(false);
-    
-    setTimeout(() => {
-      setFaceDetected(true);
-    }, 2000);
-    
-    const interval = setInterval(() => {
-      setScanProgress(prev => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          setIsScanning(false);
-          handleScanComplete();
-          return 100;
-        }
-        return prev + 10;
-      });
-    }, 200);
-  };
-
   useEffect(() => {
+    if (!permission) {
+      requestPermission();
+    }
     if (params.userData) {
       try {
         const data = JSON.parse(params.userData as string);
@@ -59,7 +43,44 @@ export default function FacialRecognitionRegister() {
       Alert.alert("Erro", "Dados do cadastro não encontrados. Volte ao cadastro.");
       router.back();
     }
-  }, [params.userData]);
+  }, [params.userData, permission, requestPermission]);
+
+  const handleStartScan = async () => {
+    if (!permission?.granted || !cameraRef.current) {
+      Alert.alert("Erro", "Permissão de câmera não concedida.", [
+        { text: "Abrir Configurações", onPress: () => Linking.openSettings() },
+        { text: "OK" },
+      ]);
+      return;
+    }
+
+    setIsScanning(true);
+    setScanProgress(0);
+    setFaceDetected(false);
+
+    try {
+      const photo = await cameraRef.current.takePhotoAsync({ base64: true });
+      console.log("Foto capturada:", photo.uri);
+      setTimeout(() => {
+        setFaceDetected(true);
+      }, 2000);
+    } catch (error) {
+      Alert.alert("Erro", "Falha ao capturar a foto.");
+      setIsScanning(false);
+    }
+
+    const interval = setInterval(() => {
+      setScanProgress((prev) => {
+        if (prev >= 100) {
+          clearInterval(interval);
+          setIsScanning(false);
+          handleScanComplete();
+          return 100;
+        }
+        return prev + 10;
+      });
+    }, 200);
+  };
 
   const handleScanComplete = () => {
     if (!userData) {
@@ -99,7 +120,46 @@ export default function FacialRecognitionRegister() {
     );
   };
 
+  const handleCaptureImage = async () => {
+    if (!permission?.granted || !cameraRef.current) {
+      Alert.alert("Erro", "Permissão de câmera não concedida.", [
+        { text: "Abrir Configurações", onPress: () => Linking.openSettings() },
+        { text: "OK" },
+      ]);
+      return;
+    }
 
+    try {
+      const photo = await cameraRef.current.takePhotoAsync({ base64: true });
+      Alert.alert("Foto Capturada", "Imagem salva com sucesso!", [
+        { text: "OK" }
+      ]);
+      console.log("Foto capturada:", photo.uri);
+    } catch (error) {
+      Alert.alert("Erro", "Falha ao capturar a foto.");
+    }
+  };
+
+  if (!permission) {
+    return <View style={styles.container} />;
+  }
+
+  if (!permission.granted) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.message}>Precisamos da sua permissão para usar a câmera</Text>
+        <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
+          <Text style={styles.permissionText}>Conceder Permissão</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.permissionButton, { marginTop: 10 }]}
+          onPress={() => Linking.openSettings()}
+        >
+          <Text style={styles.permissionText}>Abrir Configurações</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -128,23 +188,12 @@ export default function FacialRecognitionRegister() {
       )}
 
       <View style={styles.scanArea}>
-        <View style={styles.cameraFrame}>
-          {isScanning ? (
-            <View style={styles.scanningContainer}>
-              <Ionicons name="scan-outline" size={50} color="#F4C542" />
-              <Text style={styles.scanningText}>Escaneando...</Text>
-              <View style={styles.progressBar}>
-                <View style={[styles.progressFill, { width: `${scanProgress}%` }]} />
-              </View>
-              <Text style={styles.progressText}>{scanProgress}%</Text>
-            </View>
-          ) : (
-            <View style={styles.placeholderContainer}>
-              <Ionicons name="camera-outline" size={60} color="#B0B3C7" />
-              <Text style={styles.placeholderText}>Área da Câmera</Text>
-            </View>
-          )}
-        </View>
+        <CameraView
+          ref={cameraRef}
+          style={styles.cameraFrame}
+          facing="front"
+          ratio="4:3"
+        />
       </View>
 
       <View style={styles.instructionsContainer}>
@@ -165,22 +214,30 @@ export default function FacialRecognitionRegister() {
 
       <View style={styles.buttonContainer}>
         {!isScanning ? (
-          <ButtonLogin
-            icon="camera"
-            title="Iniciar Reconhecimento"
-            onPress={handleStartScan}
-            backgroundColor="#F4C542"
-            textColor="#333"
-            iconColor="#333"
-          />
+          <View style={styles.clockInButtons}>
+            <ButtonLogin
+              icon="camera"
+              title="Iniciar Reconhecimento"
+              onPress={handleStartScan}
+              backgroundColor="#F4C542"
+              textColor="#333"
+              iconColor="#333"
+            />
+            <ButtonLogin
+              icon="image"
+              title="Capturar Imagem"
+              onPress={handleCaptureImage}
+              backgroundColor="#4CAF50"
+              textColor="#FFFFFF"
+              iconColor="#FFFFFF"
+            />
+          </View>
         ) : (
           <View style={styles.scanningButton}>
             <Ionicons name="scan" size={20} color="#F4C542" />
             <Text style={styles.scanningButtonText}>Processando...</Text>
           </View>
         )}
-
-
       </View>
     </View>
   );
@@ -193,6 +250,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 40,
     paddingBottom: 20,
+  },
+  message: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    textAlign: "center",
+    marginBottom: 10,
+  },
+  permissionButton: {
+    backgroundColor: "#F4C542",
+    padding: 10,
+    borderRadius: 8,
+    alignItems: "center",
+    marginTop: 5,
+  },
+  permissionText: {
+    color: "#0A1F44",
+    fontSize: 16,
+    fontWeight: "600",
   },
   title: {
     fontSize: 28,
@@ -244,50 +319,10 @@ const styles = StyleSheet.create({
   cameraFrame: {
     width: width * 0.8,
     height: width * 0.6,
-    backgroundColor: "#142850",
     borderRadius: 16,
     borderWidth: 2,
     borderColor: "#F4C542",
-    justifyContent: "center",
-    alignItems: "center",
     overflow: "hidden",
-  },
-  scanningContainer: {
-    alignItems: "center",
-    padding: 20,
-  },
-  scanningText: {
-    color: "#F4C542",
-    fontSize: 18,
-    fontWeight: "600",
-    marginTop: 10,
-    marginBottom: 20,
-  },
-  progressBar: {
-    width: "100%",
-    height: 8,
-    backgroundColor: "#1A2A4F",
-    borderRadius: 4,
-    marginBottom: 10,
-  },
-  progressFill: {
-    height: "100%",
-    backgroundColor: "#F4C542",
-    borderRadius: 4,
-  },
-  progressText: {
-    color: "#F4C542",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  placeholderContainer: {
-    alignItems: "center",
-    padding: 20,
-  },
-  placeholderText: {
-    color: "#B0B3C7",
-    fontSize: 16,
-    marginTop: 10,
   },
   instructionsContainer: {
     backgroundColor: "#142850",
@@ -316,6 +351,10 @@ const styles = StyleSheet.create({
   buttonContainer: {
     alignItems: "center",
   },
+  clockInButtons: {
+    width: "100%",
+    gap: 12,
+  },
   scanningButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -332,5 +371,4 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginLeft: 8,
   },
-
-}); 
+});
