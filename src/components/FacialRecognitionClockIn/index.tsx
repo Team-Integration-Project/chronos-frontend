@@ -8,13 +8,14 @@ import { Ionicons } from "@expo/vector-icons";
 const { width, height } = Dimensions.get("window");
 
 export default function FacialRecognitionClockIn() {
-  const cameraRef = useRef<any>(null); // Ajustado para 'any' temporariamente
+  const cameraRef = useRef<any>(null);
   const [permission, requestPermission] = useCameraPermissions();
   const [isScanning, setIsScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
   const [clockInType, setClockInType] = useState<"entrada" | "saida" | null>(null);
   const [faceDetected, setFaceDetected] = useState(false);
   const [employeeData, setEmployeeData] = useState<any>(null);
+  const [cameraType, setCameraType] = useState<"front" | "back">("front");
 
   useEffect(() => {
     if (!permission) {
@@ -95,6 +96,10 @@ export default function FacialRecognitionClockIn() {
     router.back();
   };
 
+  const handleToggleCamera = () => {
+    setCameraType((prev) => (prev === "front" ? "back" : "front"));
+  };
+
   if (!permission) {
     return <View style={styles.container} />;
   }
@@ -128,7 +133,7 @@ export default function FacialRecognitionClockIn() {
 
       <Text style={styles.title}>Reconhecimento Facial</Text>
       <Text style={styles.subtitle}>Posicione seu rosto na área indicada</Text>
-      
+
       {faceDetected && employeeData ? (
         <View style={styles.userInfoContainer}>
           <View style={styles.faceDetectedHeader}>
@@ -151,10 +156,13 @@ export default function FacialRecognitionClockIn() {
       )}
 
       <View style={styles.scanArea}>
+        <TouchableOpacity style={styles.flipButton} onPress={handleToggleCamera}>
+          <Ionicons name="camera-reverse-outline" size={24} color="#F4C542" />
+        </TouchableOpacity>
         <CameraView
           ref={cameraRef}
           style={styles.cameraFrame}
-          facing="front"
+          facing={cameraType}
           ratio="4:3"
         />
       </View>
@@ -186,7 +194,6 @@ export default function FacialRecognitionClockIn() {
               textColor="#FFFFFF"
               iconColor="#FFFFFF"
             />
-            
             <ButtonLogin
               icon="log-out-outline"
               title="Bater Saída"
@@ -307,6 +314,13 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "#F4C542",
     overflow: "hidden",
+  },
+  flipButton: {
+    alignSelf: "center",
+    marginBottom: 10,
+    backgroundColor: "#1A2A4F",
+    padding: 10,
+    borderRadius: 30,
   },
   instructionsContainer: {
     backgroundColor: "#142850",
