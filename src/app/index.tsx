@@ -2,15 +2,20 @@ import React, { useState } from "react";
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, Alert } from "react-native";
 import { ButtonLogin } from "../components/ButtonLogin";
 import { router } from "expo-router";
-import { getUserType, saveUserType } from "../utils/userType";
+import { saveUserType } from "../utils/userType";
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import api from "../services/api";
+import { AxiosError } from "axios";
 
 export default function SignIn() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
+    // Validação inicial no frontend
     if (!email.trim() || !password.trim()) {
       Alert.alert("Erro", "Por favor, preencha todos os campos.");
       return;
@@ -22,23 +27,51 @@ export default function SignIn() {
       return;
     }
 
-    const userType = getUserType(email);
-    
-    if (userType === "Chefe de Obra") {
-      router.replace("/manager/home" as any);
-    } else if (userType === "Terceirizado") {
-      router.replace("/worker/home" as any);
-    } else {
-      const isManager = email.includes('manager') || email.includes('chefe') || email.includes('admin') || email.includes('gerente');
-      const isWorker = email.includes('worker') || email.includes('terceirizado') || email.includes('funcionario') || email.includes('operario');
-      
-      if (isManager) {
-        router.replace("/manager/home" as any);
-      } else if (isWorker) {
-        router.replace("/worker/home" as any);
-      } else {
-        router.replace("/manager/home" as any);
+    setLoading(true);
+    try {
+      // Faz a requisição à API
+      const response = await api.post("/login/", {
+        email,
+        password,
+      });
+
+      // Verifica se a resposta contém os dados esperados
+      const { access, refresh, user } = response.data;
+      if (!access || !refresh || !user || !user.role) {
+        throw new Error("Resposta da API inválida: dados incompletos.");
       }
+
+      // Armazena os tokens no AsyncStorage
+      await AsyncStorage.setItem("accessToken", access);
+      await AsyncStorage.setItem("refreshToken", refresh);
+
+      // Armazena o tipo de usuário (role)
+      const userRole = user.role.toLowerCase(); // Normaliza o role
+      await saveUserType(email, userRole);
+
+      // Redireciona com base no papel do usuário
+      if (userRole === "admin") {
+        router.replace("/manager/home");
+      } else if (userRole === "user") {
+        router.replace("/worker/home");
+      } else {
+        throw new Error("Papel do usuário inválido.");
+      }
+    } catch (error) {
+      const axiosError = error as AxiosError<{ error?: string }>;
+      if (axiosError.response) {
+        if (axiosError.response.status === 401) {
+          Alert.alert("Erro", axiosError.response.data.error || "Credenciais inválidas. Verifique seu e-mail e senha.");
+        } else if (axiosError.response.status === 400) {
+          Alert.alert("Erro", axiosError.response.data.error || "Dados inválidos. Verifique os campos informados.");
+        } else {
+          Alert.alert("Erro", "Ocorreu um erro ao fazer login. Tente novamente.");
+        }
+      } else {
+        Alert.alert("Erro", axiosError.message || "Não foi possível conectar ao servidor. Verifique sua conexão.");
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -49,60 +82,65 @@ export default function SignIn() {
         <Text style={styles.subtitle}>Sistema de Ponto Digital</Text>
 
         <View style={styles.form}>
-        <TextInput
-          placeholder="E-mail"
-          placeholderTextColor="#B0B3C7"
-          keyboardType="email-address"
-          autoCapitalize="none"
-          style={styles.input}
-          value={email}
-          onChangeText={setEmail}
-        />
-
-        <View style={styles.inputContainer}>
           <TextInput
-            placeholder="Senha"
+            placeholder="E-mail"
             placeholderTextColor="#B0B3C7"
-            secureTextEntry={!showPassword}
+            keyboardType="email-address"
+            autoCapitalize="none"
             style={styles.input}
-            value={password}
-            onChangeText={setPassword}
+            value={email}
+            onChangeText={setEmail}
+            editable={!loading}
           />
-          <TouchableOpacity
-            style={styles.eyeIcon}
-            onPress={() => setShowPassword(!showPassword)}
-          >
-            <Ionicons
-              name={showPassword ? "eye-off" : "eye"}
-              size={20}
-              color="#B0B3C7"
+
+          <View style={styles.inputContainer}>
+            <TextInput
+              placeholder="Senha"
+              placeholderTextColor="#B0B3C7"
+              secureTextEntry={!showPassword}
+              style={styles.input}
+              value={password}
+              onChangeText={setPassword}
+              editable={!loading}
             />
+            <TouchableOpacity
+              style={styles.eyeIcon}
+              onPress={() => setShowPassword(!showPassword)}
+              disabled={loading}
+            >
+              <Ionicons
+                name={showPassword ? "eye-off" : "eye"}
+                size={20}
+                color="#B0B3C7"
+              />
+            </TouchableOpacity>
+          </View>
+
+          <TouchableOpacity
+            style={styles.forgotPasswordContainer}
+            onPress={() => router.push("/auth/forgot-password")}
+            disabled={loading}
+          >
+            <Text style={styles.forgotPasswordText}>Esqueceu a senha?</Text>
           </TouchableOpacity>
+
+          <ButtonLogin
+            icon="log-in-outline"
+            title={loading ? "Carregando..." : "Entrar"}
+            onPress={handleLogin}
+            backgroundColor="#F4C542"
+            textColor="#333"
+            iconColor="#333"
+            disabled={loading}
+          />
+
+          <View style={styles.signUpContainer}>
+            <Text style={styles.noAccountText}>Não tem uma conta? </Text>
+            <TouchableOpacity onPress={() => router.push("/auth/register")} disabled={loading}>
+              <Text style={styles.signUpText}>Cadastre-se</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-
-        <TouchableOpacity 
-          style={styles.forgotPasswordContainer}
-          onPress={() => router.push("/auth/forgot-password")}
-        >
-          <Text style={styles.forgotPasswordText}>Esqueceu a senha?</Text>
-        </TouchableOpacity>
-
-        <ButtonLogin
-          icon="log-in-outline"
-          title="Entrar"
-          onPress={handleLogin}
-          backgroundColor="#F4C542"
-          textColor="#333"
-          iconColor="#333"
-        />
-
-        <View style={styles.signUpContainer}>
-          <Text style={styles.noAccountText}>Não tem uma conta? </Text>
-          <TouchableOpacity onPress={() => router.push("/auth/register")}>
-            <Text style={styles.signUpText}>Cadastre-se</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
       </View>
     </View>
   );
@@ -179,4 +217,4 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     fontSize: 14,
   },
-}); 
+});

@@ -1,8 +1,12 @@
 let userTypeStorage: { [email: string]: string } = {};
 
 export const saveUserType = (email: string, userType: string) => {
-  userTypeStorage[email] = userType;
-  console.log(`Tipo de usuário salvo para ${email}: ${userType}`);
+  try {
+    userTypeStorage[email] = userType;
+    console.log(`Tipo de usuário salvo: ${userType} para ${email}`);
+  } catch (error) {
+    console.error('Erro ao salvar tipo de usuário:', error);
+  }
 };
 
 export const getUserType = (email: string): string | null => {
