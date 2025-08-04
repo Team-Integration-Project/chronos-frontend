@@ -1,29 +1,29 @@
 import React, { useState, useEffect, useRef } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Alert, Dimensions, Linking } from "react-native";
-import { CameraView, useCameraPermissions } from "expo-camera";
-import { ButtonLogin } from "../ButtonLogin"; // Ajuste o caminho se necessário
+import { CameraView, useCameraPermissions, CameraPictureOptions } from "expo-camera";
+import { ButtonLogin } from "../ButtonLogin";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import axios from "axios";
+import api from "../../services/api";
 
-const { width, height } = Dimensions.get("window");
+const { width } = Dimensions.get("window");
 
 export default function FacialRecognitionClockIn() {
-  const cameraRef = useRef<any>(null);
+  const cameraRef = useRef<CameraView>(null);
   const [permission, requestPermission] = useCameraPermissions();
   const [isScanning, setIsScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
-  const [clockInType, setClockInType] = useState<"entrada" | "saida" | null>(null);
+  const [clockInType, setClockInType] = useState<"entrada" | "saida" | "almoco" | null>(null);
   const [faceDetected, setFaceDetected] = useState(false);
   const [employeeData, setEmployeeData] = useState<any>(null);
   const [cameraType, setCameraType] = useState<"front" | "back">("front");
 
   useEffect(() => {
-    if (!permission) {
-      requestPermission();
-    }
-  }, [permission, requestPermission]);
+    if (!permission) requestPermission();
+  }, [permission]);
 
-  const handleStartScan = async (type: "entrada" | "saida") => {
+  const handleStartScan = async (type: "entrada" | "saida" | "almoco") => {
     if (!permission?.granted || !cameraRef.current) {
       Alert.alert("Erro", "Permissão de câmera não concedida.", [
         { text: "Abrir Configurações", onPress: () => Linking.openSettings() },
@@ -39,20 +39,41 @@ export default function FacialRecognitionClockIn() {
     setEmployeeData(null);
 
     try {
-      const photo = await cameraRef.current.takePhotoAsync({ base64: true });
-      console.log("Foto capturada:", photo.uri);
-      setTimeout(() => {
-        setFaceDetected(true);
-        setEmployeeData({
-          nome: "João Silva",
-          cpf: "123.456.789-00",
-          funcao: "Chefe de Obra",
-          matricula: "2024001",
-          empresa: "Construtora ABC Ltda",
-        });
-      }, 2000);
+      const options: CameraPictureOptions = { base64: true, quality: 0.8 };
+      const photo = await cameraRef.current.takePictureAsync(options);
+
+      const formData = new FormData();
+      formData.append("face_image", {
+        uri: photo.uri,
+        type: "image/jpeg",
+        name: "face_image.jpg",
+      } as any); // <-- necessário em React Native
+
+      formData.append("point_type", type);
+
+      const response = await api.post("/mark-attendance/", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      setFaceDetected(true);
+      setEmployeeData({
+        nome: response.data.full_name || "Usuário Desconhecido",
+        cpf: response.data.cpf || "N/A",
+        funcao: response.data.funcao || "N/A",
+        matricula: response.data.matricula || "N/A",
+        empresa: response.data.empresa || "N/A",
+      });
+
+      handleScanComplete(type);
     } catch (error) {
-      Alert.alert("Erro", "Falha ao capturar a foto.");
+      if (axios.isAxiosError(error)) {
+        console.error("Erro ao registrar ponto:", error.response?.data || error.message);
+        Alert.alert("Erro", error.response?.data?.error || "Falha ao registrar ponto.");
+      } else {
+        console.error("Erro desconhecido:", error);
+        Alert.alert("Erro", "Erro inesperado ao registrar ponto.");
+      }
+    } finally {
       setIsScanning(false);
     }
 
@@ -60,8 +81,6 @@ export default function FacialRecognitionClockIn() {
       setScanProgress((prev) => {
         if (prev >= 100) {
           clearInterval(interval);
-          setIsScanning(false);
-          if (faceDetected) handleScanComplete(type);
           return 100;
         }
         return prev + 10;
@@ -69,7 +88,7 @@ export default function FacialRecognitionClockIn() {
     }, 200);
   };
 
-  const handleScanComplete = (type: "entrada" | "saida") => {
+  const handleScanComplete = (type: "entrada" | "saida" | "almoco") => {
     const currentTime = new Date().toLocaleTimeString("pt-BR", {
       hour: "2-digit",
       minute: "2-digit",
@@ -79,31 +98,15 @@ export default function FacialRecognitionClockIn() {
 
     Alert.alert(
       "Ponto Registrado",
-      `${type === "entrada" ? "Entrada" : "Saída"} registrada com sucesso!\n\nData: ${currentDate}\nHorário: ${currentTime}`,
-      [
-        {
-          text: "OK",
-          onPress: () => {
-            console.log(`Ponto ${type} registrado: ${currentDate} ${currentTime}`);
-            router.replace("/manager/home");
-          },
-        },
-      ]
+      `${type === "entrada" ? "Entrada" : type === "saida" ? "Saída" : "Almoço"} registrada com sucesso!\n\nData: ${currentDate}\nHorário: ${currentTime}`,
+      [{ text: "OK", onPress: () => router.replace("/manager/home") }]
     );
   };
 
-  const handleBackToHome = () => {
-    router.back();
-  };
+  const handleBackToHome = () => router.back();
+  const handleToggleCamera = () => setCameraType((prev) => (prev === "front" ? "back" : "front"));
 
-  const handleToggleCamera = () => {
-    setCameraType((prev) => (prev === "front" ? "back" : "front"));
-  };
-
-  if (!permission) {
-    return <View style={styles.container} />;
-  }
-
+  if (!permission) return <View style={styles.container} />;
   if (!permission.granted) {
     return (
       <View style={styles.container}>
@@ -169,18 +172,16 @@ export default function FacialRecognitionClockIn() {
 
       <View style={styles.instructionsContainer}>
         <Text style={styles.instructionsTitle}>Instruções:</Text>
-        <View style={styles.instructionItem}>
-          <Ionicons name="checkmark-circle" size={14} color="#F4C542" />
-          <Text style={styles.instructionText}>Mantenha o rosto bem iluminado</Text>
-        </View>
-        <View style={styles.instructionItem}>
-          <Ionicons name="checkmark-circle" size={14} color="#F4C542" />
-          <Text style={styles.instructionText}>Olhe diretamente para a câmera</Text>
-        </View>
-        <View style={styles.instructionItem}>
-          <Ionicons name="checkmark-circle" size={14} color="#F4C542" />
-          <Text style={styles.instructionText}>Mantenha-se a uma distância adequada</Text>
-        </View>
+        {[
+          "Mantenha o rosto bem iluminado",
+          "Olhe diretamente para a câmera",
+          "Mantenha-se a uma distância adequada",
+        ].map((instruction, i) => (
+          <View style={styles.instructionItem} key={i}>
+            <Ionicons name="checkmark-circle" size={14} color="#F4C542" />
+            <Text style={styles.instructionText}>{instruction}</Text>
+          </View>
+        ))}
       </View>
 
       <View style={styles.buttonContainer}>
@@ -202,12 +203,20 @@ export default function FacialRecognitionClockIn() {
               textColor="#FFFFFF"
               iconColor="#FFFFFF"
             />
+            <ButtonLogin
+              icon="restaurant-outline"
+              title="Bater Almoço"
+              onPress={() => handleStartScan("almoco")}
+              backgroundColor="#FF9800"
+              textColor="#FFFFFF"
+              iconColor="#FFFFFF"
+            />
           </View>
         ) : (
           <View style={styles.scanningButton}>
             <Ionicons name="scan" size={20} color="#F4C542" />
             <Text style={styles.scanningButtonText}>
-              Processando {clockInType === "entrada" ? "entrada" : "saída"}...
+              Processando {clockInType === "entrada" ? "entrada" : clockInType === "saida" ? "saída" : "almoço"}...
             </Text>
           </View>
         )}
@@ -370,3 +379,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
 });
+
+
+
+
