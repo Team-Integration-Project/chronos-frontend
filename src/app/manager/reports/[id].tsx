@@ -1,85 +1,61 @@
-import React, { useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, Dimensions } from "react-native";
+import React, { useState, useEffect } from "react";
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, Dimensions, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, router } from "expo-router";
-
-const MOCK_REPORTS = [
-  { id: "1", date: "01/07/2025", entrada: "07:00", pausaMerenda: "08:30", saidaMerenda: "08:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
-  { id: "2", date: "02/07/2025", entrada: "07:00", pausaMerenda: "08:30", saidaMerenda: "08:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
-];
+import api from "@/services/api";
 
 const { width } = Dimensions.get("window");
 
 export default function ReportIndividualScreen() {
   const params = useLocalSearchParams();
   const name = params.name || "Funcionário";
+  const userId = params.id as string;
   const [period, setPeriod] = useState("mes");
-  
-  const mockDataByPeriod = {
-    hoje: [
-      { id: "1", date: "15/12/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
-    ],
-    semana: [
-      { id: "1", date: "09/12/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
-      { id: "2", date: "10/12/2024", entrada: "08:15", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Atraso", observacao: "Atraso de 15 min" },
-      { id: "3", date: "11/12/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
-      { id: "4", date: "12/12/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
-      { id: "5", date: "13/12/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
-    ],
-    mes: [
-      { id: "1", date: "01/12/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
-      { id: "2", date: "02/12/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
-      { id: "3", date: "03/12/2024", entrada: "08:15", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Atraso", observacao: "Atraso de 15 min" },
-      { id: "4", date: "04/12/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
-      { id: "5", date: "05/12/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
-      { id: "6", date: "06/12/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
-      { id: "7", date: "07/12/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
-      { id: "8", date: "08/12/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
-      { id: "9", date: "09/12/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
-      { id: "10", date: "10/12/2024", entrada: "08:15", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Atraso", observacao: "Atraso de 15 min" },
-      { id: "11", date: "11/12/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
-      { id: "12", date: "12/12/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
-      { id: "13", date: "13/12/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
-      { id: "14", date: "14/12/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
-      { id: "15", date: "15/12/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
-    ],
-    ano: [
-      { id: "1", date: "01/01/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
-      { id: "2", date: "01/02/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
-      { id: "3", date: "01/03/2024", entrada: "08:15", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Atraso", observacao: "Atraso de 15 min" },
-      { id: "4", date: "01/04/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
-      { id: "5", date: "01/05/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
-      { id: "6", date: "01/06/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
-      { id: "7", date: "01/07/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
-      { id: "8", date: "01/08/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
-      { id: "9", date: "01/09/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
-      { id: "10", date: "01/10/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
-      { id: "11", date: "01/11/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
-      { id: "12", date: "01/12/2024", entrada: "08:00", pausaMerenda: "10:30", saidaMerenda: "10:45", entradaAlmoco: "12:00", saidaAlmoco: "13:00", entradaMerenda: "15:30", saida: "17:00", status: "Aprovado", observacao: "" },
-    ]
-  };
+  const [attendances, setAttendances] = useState<any[]>([]);
+  const [totalAttendances, setTotalAttendances] = useState(0);
+  const [stats, setStats] = useState({ totalHoras: 0, totalFaltas: 0, totalAtrasos: 0, totalJustificativas: 0 });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Obter dados baseado no período selecionado
-  const currentReports = mockDataByPeriod[period as keyof typeof mockDataByPeriod] || mockDataByPeriod.mes;
-  
-  // Calcular estatísticas baseadas no período selecionado
-  const calculateStats = () => {
-    const totalDays = currentReports.length;
-    const approvedDays = currentReports.filter(r => r.status === "Aprovado").length;
-    const lateDays = currentReports.filter(r => r.status === "Atraso").length;
-    const totalHours = totalDays * 8; 
-    
-    return {
-      totalHoras: totalHours,
-      totalFaltas: totalDays - approvedDays - lateDays,
-      totalAtrasos: lateDays,
-      totalJustificativas: 0 
+  useEffect(() => {
+    const fetchUserAttendance = async () => {
+      try {
+        setLoading(true);
+        const response = await api.get(`/attendance/${userId}/?period=${period}`); // Corrigido para remover /api/ duplicado
+        const { attendances: data, total_attendances, stats: newStats } = response.data;
+        setAttendances(data);
+        setTotalAttendances(total_attendances);
+        setStats(newStats);
+      } catch (error) {
+        console.error("Erro ao buscar atendimentos:", error);
+        setError("Falha ao carregar os atendimentos. Tente novamente.");
+      } finally {
+        setLoading(false);
+      }
     };
-  };
 
-  const stats = calculateStats();
+    fetchUserAttendance();
+  }, [userId, period]);
 
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#F4C542" />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
+  if (error) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.emptyText}>{error}</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -105,32 +81,24 @@ export default function ReportIndividualScreen() {
           <FilterBtn label="Ano" active={period === "ano"} onPress={() => setPeriod("ano")} />
         </View>
       </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={true} style={{ marginHorizontal: 12, marginTop: 10 }} contentContainerStyle={{ minWidth: 1100, paddingBottom: 32 }}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={true} style={{ marginHorizontal: 12, marginTop: 10 }} contentContainerStyle={{ minWidth: 900, paddingBottom: 32 }}>
         <View style={styles.tableSection}>
           <View style={styles.tableHeader}>
             <Text style={[styles.tableCell, { minWidth: 100 }]}>Data</Text>
             <Text style={[styles.tableCell, { minWidth: 90 }]}>Entrada</Text>
-            <Text style={[styles.tableCell, { minWidth: 110 }]}>Merenda</Text>
-            <Text style={[styles.tableCell, { minWidth: 110 }]}>Saída</Text>
             <Text style={[styles.tableCell, { minWidth: 110 }]}>Almoço</Text>
             <Text style={[styles.tableCell, { minWidth: 110 }]}>Saída</Text>
-            <Text style={[styles.tableCell, { minWidth: 110 }]}>Merenda</Text>
-            <Text style={[styles.tableCell, { minWidth: 90 }]}>Saída</Text>
             <Text style={[styles.tableCell, { minWidth: 110 }]}>Status</Text>
             <Text style={[styles.tableCell, { minWidth: 180 }]}>Observação</Text>
           </View>
-          {currentReports.map((r, idx) => (
+          {attendances.map((r, idx) => (
             <View key={r.id} style={[styles.tableRow, idx % 2 === 0 && styles.tableRowAlt]}>
               <Text style={[styles.tableCell, { minWidth: 100 }]}>{r.date}</Text>
               <Text style={[styles.tableCell, { minWidth: 90 }]}>{r.entrada}</Text>
-              <Text style={[styles.tableCell, { minWidth: 110 }]}>{r.pausaMerenda || '-'}</Text>
-              <Text style={[styles.tableCell, { minWidth: 110 }]}>{r.saidaMerenda || '-'}</Text>
-              <Text style={[styles.tableCell, { minWidth: 110 }]}>{r.entradaAlmoco || '-'}</Text>
-              <Text style={[styles.tableCell, { minWidth: 110 }]}>{r.saidaAlmoco || '-'}</Text>
-              <Text style={[styles.tableCell, { minWidth: 110 }]}>{r.entradaMerenda || '-'}</Text>
-              <Text style={[styles.tableCell, { minWidth: 90 }]}>{r.saida || '-'}</Text>
+              <Text style={[styles.tableCell, { minWidth: 110 }]}>{r.entrada_almoco}</Text>
+              <Text style={[styles.tableCell, { minWidth: 110 }]}>{r.saida}</Text>
               <Text style={[styles.tableCell, { minWidth: 110 }]}><StatusBadge status={r.status} /></Text>
-              <Text style={[styles.tableCell, { minWidth: 180 }]} numberOfLines={1} ellipsizeMode="tail">{r.observacao || '-'}</Text>
+              <Text style={[styles.tableCell, { minWidth: 180 }]} numberOfLines={1} ellipsizeMode="tail">{r.observacao}</Text>
             </View>
           ))}
         </View>
@@ -146,13 +114,14 @@ export default function ReportIndividualScreen() {
 type SummaryCardProps = { label: string; value: number; color: string; icon: any };
 function SummaryCard({ label, value, color, icon }: SummaryCardProps) {
   return (
-    <View style={[styles.summaryCard, { borderColor: color }]}> 
+    <View style={[styles.summaryCard, { borderColor: color }]}>
       <Ionicons name={icon} size={22} color={color} style={{ marginBottom: 4 }} />
       <Text style={styles.summaryValue}>{value}</Text>
       <Text style={styles.summaryLabel}>{label}</Text>
     </View>
   );
 }
+
 type FilterBtnProps = { label: string; active: boolean; onPress: () => void };
 function FilterBtn({ label, active, onPress }: FilterBtnProps) {
   return (
@@ -165,6 +134,7 @@ function FilterBtn({ label, active, onPress }: FilterBtnProps) {
     </TouchableOpacity>
   );
 }
+
 type DownloadBtnProps = { label: string; color: string; icon: any; onPress: () => void };
 function DownloadBtn({ label, color, icon, onPress }: DownloadBtnProps) {
   return (
@@ -185,7 +155,7 @@ function StatusBadge({ status }: StatusBadgeProps) {
   else if (status === 'Falta') { color = '#fff'; bg = '#FF6B6B'; label = 'Falta'; }
   else if (status === 'Pendente') { color = '#0A1F44'; bg = '#F4C542'; label = 'Pendente'; }
   return (
-    <View style={[styles.statusBadge, { backgroundColor: bg }]}> 
+    <View style={[styles.statusBadge, { backgroundColor: bg }]}>
       <Text style={[styles.statusBadgeText, { color }]}>{label}</Text>
     </View>
   );
@@ -334,41 +304,16 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     fontSize: 16,
   },
-  helpButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#142850",
-    borderRadius: 18,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderWidth: 1,
-    borderColor: "#F4C542",
-    shadowColor: "#000",
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-    position: "absolute",
-    left: width / 2 - 90,
-    bottom: 32,
-  },
-  helpButtonText: {
-    color: "#F4C542",
-    fontSize: 15,
-    fontWeight: "600",
-    marginLeft: 10,
-  },
-  helpBtn: {
-    flexDirection: "row",
-    alignItems: "center",
+  loadingContainer: {
+    flex: 1,
     justifyContent: "center",
-    marginTop: 10,
-    marginBottom: 18,
+    alignItems: "center",
   },
-  helpBtnText: {
-    color: "#F4C542",
-    fontSize: 15,
-    marginLeft: 6,
-    fontWeight: "bold",
+  emptyText: {
+    color: "#B0B3C7",
+    fontSize: 16,
+    textAlign: "center",
+    marginTop: 40,
   },
   backBtn: {
     padding: 8,
@@ -387,4 +332,4 @@ const styles = StyleSheet.create({
     fontSize: 13,
     textAlign: 'center',
   },
-}); 
+});
