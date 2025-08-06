@@ -1,17 +1,36 @@
-import React from "react";
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, Dimensions } from "react-native";
+import React, { useState, useEffect } from "react";
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, Dimensions, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-
-const MOCK_USERS = [
-  { id: "1", name: "Maria Santos" },
-  { id: "2", name: "Pedro Costa" },
-  { id: "3", name: "Ana Oliveira" },
-];
+import api from "@/services/api";
 
 const { width } = Dimensions.get("window");
 
 export default function ReportsScreen() {
+  const [users, setUsers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        console.log("Enviando requisição para /users-with-attendance/");
+        const response = await api.get("/users-with-attendance/");
+        setUsers(response.data);
+      } catch (error) {
+        console.error("Erro ao buscar usuários:", error);
+        if (error.response) {
+          console.error("Status:", error.response.status);
+          console.error("Data:", error.response.data);
+        }
+        setError("Falha ao carregar os usuários. Tente novamente.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchUsers();
+  }, []);
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.headerRow}>
@@ -22,25 +41,40 @@ export default function ReportsScreen() {
         <View style={{ width: 32 }} />
       </View>
       <Text style={styles.subHeader}>Toque no olho para ver detalhes</Text>
-      <ScrollView style={styles.list} contentContainerStyle={{ paddingBottom: 32 }}>
-        {MOCK_USERS.length === 0 ? (
-          <Text style={styles.emptyText}>Nenhum funcionário encontrado.</Text>
-        ) : (
-          MOCK_USERS.map(emp => (
-            <TouchableOpacity
-              key={emp.id}
-              style={styles.card}
-              activeOpacity={0.85}
-              onPress={() => router.push({ pathname: "/manager/reports/[id]", params: { id: emp.id, name: emp.name } })}
-            >
-              <Text style={styles.name}>{emp.name}</Text>
-              <View style={styles.eyeBtn}>
-                <Ionicons name="eye-outline" size={22} color="#0A1F44" />
-              </View>
-            </TouchableOpacity>
-          ))
-        )}
-      </ScrollView>
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#F4C542" />
+        </View>
+      ) : error ? (
+        <View style={styles.loadingContainer}>
+          <Text style={styles.emptyText}>{error}</Text>
+        </View>
+      ) : (
+        <ScrollView style={styles.list} contentContainerStyle={{ paddingBottom: 32 }}>
+          {users.length === 0 ? (
+            <Text style={styles.emptyText}>Nenhum funcionário encontrado.</Text>
+          ) : (
+            users.map((user) => (
+              <TouchableOpacity
+                key={user.id}
+                style={styles.card}
+                activeOpacity={0.85}
+                onPress={() =>
+                  router.push({
+                    pathname: "/manager/reports/[id]",
+                    params: { id: user.id, name: user.username },
+                  })
+                }
+              >
+                <Text style={styles.name}>{user.username}</Text>
+                <View style={styles.eyeBtn}>
+                  <Ionicons name="eye-outline" size={22} color="#0A1F44" />
+                </View>
+              </TouchableOpacity>
+            ))
+          )}
+        </ScrollView>
+      )}
       <TouchableOpacity style={styles.actionButton} onPress={() => router.push("/help" as any)}>
         <Ionicons name="help-circle-outline" size={24} color="#F4C542" />
         <Text style={styles.actionButtonText}>Ajuda</Text>
@@ -168,4 +202,9 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginLeft: 10,
   },
-}); 
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+});

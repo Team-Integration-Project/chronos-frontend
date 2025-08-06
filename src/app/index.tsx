@@ -15,7 +15,6 @@ export default function SignIn() {
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
-    // Validação inicial no frontend
     if (!email.trim() || !password.trim()) {
       Alert.alert("Erro", "Por favor, preencha todos os campos.");
       return;
@@ -29,27 +28,19 @@ export default function SignIn() {
 
     setLoading(true);
     try {
-      // Faz a requisição à API
-      const response = await api.post("/login/", {
-        email,
-        password,
-      });
-
-      // Verifica se a resposta contém os dados esperados
+      const response = await api.post("/login/", { email, password });
       const { access, refresh, user } = response.data;
       if (!access || !refresh || !user || !user.role) {
         throw new Error("Resposta da API inválida: dados incompletos.");
       }
 
-      // Armazena os tokens no AsyncStorage
       await AsyncStorage.setItem("accessToken", access);
       await AsyncStorage.setItem("refreshToken", refresh);
+      console.log("Tokens salvos:", { access, refresh }); // Log pra verificar
 
-      // Armazena o tipo de usuário (role)
-      const userRole = user.role.toLowerCase(); // Normaliza o role
+      const userRole = user.role.toLowerCase();
       await saveUserType(email, userRole);
 
-      // Redireciona com base no papel do usuário
       if (userRole === "admin") {
         router.replace("/manager/home");
       } else if (userRole === "user") {

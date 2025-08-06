@@ -47,8 +47,7 @@ export default function FacialRecognitionClockIn() {
         uri: photo.uri,
         type: "image/jpeg",
         name: "face_image.jpg",
-      } as any); // <-- necessário em React Native
-
+      } as any);
       formData.append("point_type", type);
 
       const response = await api.post("/mark-attendance/", formData, {
@@ -57,11 +56,13 @@ export default function FacialRecognitionClockIn() {
 
       setFaceDetected(true);
       setEmployeeData({
-        nome: response.data.full_name || "Usuário Desconhecido",
-        cpf: response.data.cpf || "N/A",
-        funcao: response.data.funcao || "N/A",
-        matricula: response.data.matricula || "N/A",
-        empresa: response.data.empresa || "N/A",
+        nome: response.data.full_name,
+        cpf: response.data.cpf,
+        funcao: response.data.funcao,
+        matricula: response.data.matricula,
+        empresa: response.data.empresa,
+        date: response.data.date,
+        last_records: response.data.last_records,
       });
 
       handleScanComplete(type);
@@ -69,6 +70,13 @@ export default function FacialRecognitionClockIn() {
       if (axios.isAxiosError(error)) {
         console.error("Erro ao registrar ponto:", error.response?.data || error.message);
         Alert.alert("Erro", error.response?.data?.error || "Falha ao registrar ponto.");
+        setEmployeeData({
+          nome: "Erro no Registro",
+          cpf: "N/A",
+          funcao: "N/A",
+          matricula: "",
+          empresa: "",
+        });
       } else {
         console.error("Erro desconhecido:", error);
         Alert.alert("Erro", "Erro inesperado ao registrar ponto.");
@@ -149,6 +157,17 @@ export default function FacialRecognitionClockIn() {
           <Text style={styles.userInfoText}>Função: {employeeData.funcao}</Text>
           <Text style={styles.userInfoText}>Matrícula: {employeeData.matricula}</Text>
           <Text style={styles.userInfoText}>Empresa: {employeeData.empresa}</Text>
+          <Text style={styles.userInfoText}>Data: {employeeData.date}</Text>
+          {employeeData.last_records && employeeData.last_records.length > 0 && (
+            <View>
+              <Text style={styles.userInfoTitle}>Últimos Registros:</Text>
+              {employeeData.last_records.map((record: any, index: number) => (
+                <Text key={index} style={styles.userInfoText}>
+                  {record.point_type} - {new Date(record.data_hora).toLocaleString("pt-BR")}
+                </Text>
+              ))}
+            </View>
+          )}
         </View>
       ) : (
         <View style={styles.userInfoContainer}>
@@ -379,7 +398,3 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
 });
-
-
-
-
