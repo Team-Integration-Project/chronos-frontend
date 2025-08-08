@@ -1,217 +1,233 @@
-import React, { useState, useRef } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, FlatList, Modal, TextInput, Pressable, ScrollView } from "react-native";
+import React, { useState, useEffect, useRef } from "react";
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, FlatList, Modal, TextInput, ScrollView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import api from "../../../services/api";
 
-const USER = {
-  nome: "João Silva",
-  email: "joao.silva@empresa.com",
-  funcao: "",
-  empresa: "Construtora ABC Ltda",
-  cpf: "123.456.789-00",
-  dataCadastro: "2024-06-01",
+interface User {
+  username: string;
+  email: string;
+  cpf: string;
+  phone_number: string;
+  role: string;
+}
+
+interface Funcionario {
+  id: string;
+  nome: string;
+  email: string;
+  cpf: string;
+  phone_number: string;
+  role: string;
+}
+
+const formatCPF = (cpf: string): string => {
+  if (!cpf) return "";
+  const cleaned = cpf.replace(/\D/g, "");
+  if (cleaned.length > 11) return cleaned.slice(0, 11);
+  return cleaned
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d{1,2})$/, "$1-$2");
 };
 
-const FUNCOES = ["Chefe de Obra", "Terceirizado"];
+const formatPhoneNumber = (phone: string): string => {
+  if (!phone) return "";
+  const cleaned = phone.replace(/\D/g, "");
+  if (cleaned.length > 11) return cleaned.slice(0, 11);
+  if (cleaned.length <= 10) {
+    return cleaned
+      .replace(/(\d{2})(\d)/, "($1) $2")
+      .replace(/(\d{4})(\d)/, "$1-$2");
+  }
+  return cleaned
+    .replace(/(\d{2})(\d)/, "($1) $2")
+    .replace(/(\d{5})(\d)/, "$1-$2");
+};
 
-const FUNCOES_CIVIL: { nome: string; icone: string }[] = [
-  { nome: 'Chefe de Obra', icone: 'business-outline' },
-  { nome: 'Pedreiro', icone: 'hammer-outline' },
-  { nome: 'Servente', icone: 'construct-outline' },
-  { nome: 'Armador', icone: 'build-outline' },
-  { nome: 'Carpinteiro', icone: 'cut-outline' },
-  { nome: 'Eletricista', icone: 'flash-outline' },
-  { nome: 'Encanador', icone: 'water-outline' },
-  { nome: 'Pintor', icone: 'color-palette-outline' },
-  { nome: 'Mestre de Obras', icone: 'school-outline' },
-  { nome: 'Técnico de Segurança', icone: 'shield-checkmark-outline' },
-  { nome: 'Outro', icone: 'person-outline' }
-];
-
-const FUNCIONARIOS_INICIAIS = [
-  {
-    id: "1",
-    nome: "Carlos Souza",
-    email: "carlos@empresa.com",
-    funcao: "Pedreiro",
-    cpf: "111.222.333-44",
-    dataAdmissao: "2024-06-10",
-    status: "Ativo",
-    ultimoPonto: "2024-07-01 07:02",
-    diasTrabalhados: 22,
-    faltas: 1,
-    obraAtual: "Edifício Alpha",
-    observacoes: "Ótimo desempenho, sempre pontual."
-  },
-  {
-    id: "2",
-    nome: "Maria Oliveira",
-    email: "maria@empresa.com",
-    funcao: "Servente",
-    cpf: "555.666.777-88",
-    dataAdmissao: "2024-06-12",
-    status: "Afastado",
-    ultimoPonto: "2024-06-28 16:55",
-    diasTrabalhados: 18,
-    faltas: 3,
-    obraAtual: "Residencial Beta",
-    observacoes: "Afastada por motivo de saúde."
-  },
-];
-
-const HISTORICO_INICIAL = [
-  { id: "h1", acao: "Adicionou funcionário Carlos Souza", data: "2024-06-10 09:12" },
-  { id: "h2", acao: "Adicionou funcionário Maria Oliveira", data: "2024-06-12 14:30" },
-];
+const unformat = (value: string): string => value.replace(/\D/g, "");
 
 export default function ProfileScreen() {
-  const [funcionarios, setFuncionarios] = useState(FUNCIONARIOS_INICIAIS);
-  const [historico, setHistorico] = useState(HISTORICO_INICIAL);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [novoFuncionario, setNovoFuncionario] = useState({
-    nome: "",
+  const [user, setUser] = useState<User>({
+    username: "",
     email: "",
-    funcao: FUNCOES_CIVIL[0].nome,
     cpf: "",
-    obraAtual: "",
-    observacoes: "",
-    status: "Ativo"
+    phone_number: "",
+    role: "",
   });
-  const [feedback, setFeedback] = useState("");
-  const [userFuncao] = useState(USER.funcao || "Chefe de Obra");
-  const [modalFuncaoCivil, setModalFuncaoCivil] = useState(false);
-  const [funcionarioParaRemover, setFuncionarioParaRemover] = useState<null | { id: string; nome: string }>(null);
-  const [modalRemover, setModalRemover] = useState(false);
-  const [funcionarioDetalhe, setFuncionarioDetalhe] = useState<null | typeof FUNCIONARIOS_INICIAIS[0]>(null);
-  const [modalDetalhe, setModalDetalhe] = useState(false);
-  const [busca, setBusca] = useState("");
-  const [filtroFuncao, setFiltroFuncao] = useState("");
-  const [filtroStatus, setFiltroStatus] = useState("");
-  const [filtroObra, setFiltroObra] = useState("");
-  const [modalEditar, setModalEditar] = useState(false);
-  const [funcionarioEditar, setFuncionarioEditar] = useState<any>(null);
-  const [snackbar, setSnackbar] = useState("");
-  const snackbarTimeout = useRef<number | null>(null);
-  const [modalStatusFuncionario, setModalStatusFuncionario] = useState(false);
-  const [modalStatusEditar, setModalStatusEditar] = useState(false);
-  const [modalObra, setModalObra] = useState(false);
-  const [modalFuncaoCivilEditar, setModalFuncaoCivilEditar] = useState(false);
+  const [funcionarios, setFuncionarios] = useState<Funcionario[]>([]);
+  const [modalEditar, setModalEditar] = useState<boolean>(false);
+  const [funcionarioEditar, setFuncionarioEditar] = useState<Funcionario | null>(null);
+  const [displayData, setDisplayData] = useState<{ cpf: string; phone_number: string }>({ cpf: "", phone_number: "" });
+  const [busca, setBusca] = useState<string>("");
+  const [filtroFuncao, setFiltroFuncao] = useState<string>("");
+  const [modalRemover, setModalRemover] = useState<boolean>(false);
+  const [funcionarioParaRemover, setFuncionarioParaRemover] = useState<{ id: string; nome: string } | null>(null);
+  const [snackbar, setSnackbar] = useState<string>("");
+  const [loading, setLoading] = useState<boolean>(true);
+  const snackbarTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  function validarEmail(email: string) {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-  }
-  function validarTelefone(telefone: string) {
-    return /^\(\d{2}\) \d{4,5}-\d{4}$/.test(telefone);
-  }
-  function validarData(data: string) {
-    return /^\d{4}-\d{2}-\d{2}$/.test(data);
-  }
-  function validarCPF(cpf: string) {
-    return cpf.trim().length > 0;
-  }
-
-  const handleAddFuncionario = () => {
-    if (!novoFuncionario.nome.trim() || !novoFuncionario.email.trim() || !novoFuncionario.funcao.trim() || !novoFuncionario.cpf.trim()) {
-      setFeedback("Preencha todos os campos!");
-      return;
-    }
-    if (!validarEmail(novoFuncionario.email)) {
-      setFeedback("E-mail inválido!");
-      return;
-    }
-    const obras = ["Edifício Alpha", "Residencial Beta", "Obra Central", "Galpão Zeta", "Prédio Omega"];
-    const randomObra = obras[Math.floor(Math.random() * obras.length)];
-    const diasTrabalhados = Math.floor(Math.random() * 30) + 1;
-    const faltas = Math.floor(Math.random() * 3);
-    const hoje = new Date();
-    const ultimoPonto = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate(), 7 + Math.floor(Math.random() * 2), Math.floor(Math.random() * 60));
-    const obsList = [
-      "Ótimo desempenho, sempre pontual.",
-      "Precisa melhorar o uso de EPI.",
-      "Afastado por motivo de saúde.",
-      "Destaque na obra atual.",
-      "Faltou na última sexta-feira.",
-      "Reforço temporário na equipe.",
-      "Sem observações recentes."
-    ];
-    const observacoes = obsList[Math.floor(Math.random() * obsList.length)];
-    const novo = {
-      ...novoFuncionario,
-      id: (Math.random() * 100000).toFixed(0),
-      dataAdmissao: new Date().toISOString().slice(0, 10),
-      status: novoFuncionario.status,
-      ultimoPonto: ultimoPonto.toLocaleString("pt-BR", { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' }),
-      diasTrabalhados,
-      faltas,
-      obraAtual: novoFuncionario.obraAtual || randomObra,
-      observacoes: novoFuncionario.observacoes || observacoes
-    };
-    setFuncionarios(prev => [...prev, novo]);
-    setHistorico(prev => [
-      { id: `h${Math.random() * 100000}`, acao: `Adicionou funcionário ${novo.nome}`, data: new Date().toLocaleString("pt-BR") },
-      ...prev,
-    ]);
-    setFeedback("Funcionário adicionado com sucesso!");
-    setNovoFuncionario({ nome: "", email: "", funcao: FUNCOES_CIVIL[0].nome, cpf: "", obraAtual: "", observacoes: "", status: "Ativo" });
-    setTimeout(() => {
-      setModalVisible(false);
-      setFeedback("");
-    }, 1200);
-    setSnackbar("Funcionário adicionado com sucesso!");
-    if (snackbarTimeout.current) clearTimeout(snackbarTimeout.current);
-    snackbarTimeout.current = setTimeout(() => setSnackbar(""), 2000);
-  };
-
-  const handleRemoverFuncionario = (id: string, nome: string) => {
-    setFuncionarioParaRemover({ id, nome });
-    setModalRemover(true);
-  };
-  const confirmarRemocaoFuncionario = () => {
-    if (funcionarioParaRemover) {
-      const nomeRemovido = funcionarioParaRemover.nome;
-      setFuncionarios(prev => prev.filter(f => f.id !== funcionarioParaRemover.id));
-      setHistorico(prev => [
-        { id: `h${Math.random() * 100000}`, acao: `Removeu funcionário ${nomeRemovido}`, data: new Date().toLocaleString("pt-BR") },
-        ...prev,
-      ]);
-      setFuncionarioParaRemover(null);
-      setModalRemover(false);
-      setSnackbar(`Funcionário ${nomeRemovido} removido!`);
+  const fetchProfile = async () => {
+    try {
+      const response = await api.get("/profile/");
+      const userData: User = response.data;
+      setUser({
+        username: userData.username || "Não informado",
+        email: userData.email || "Não informado",
+        cpf: userData.cpf || "Não informado",
+        phone_number: userData.phone_number || "Não informado",
+        role: userData.role === "admin" ? "Chefe de Obra" : "Terceirizado",
+      });
+    } catch (error) {
+      console.error("Erro ao buscar perfil:", error);
+      setSnackbar("Erro ao carregar perfil.");
       if (snackbarTimeout.current) clearTimeout(snackbarTimeout.current);
       snackbarTimeout.current = setTimeout(() => setSnackbar(""), 2000);
     }
   };
 
-  const handleLogout = () => {
-    router.replace("/");
+  const fetchFuncionarios = async () => {
+    try {
+      const response = await api.get("/list-manage/");
+      const users: Funcionario[] = response.data.map((user: any) => ({
+        id: user.id.toString(),
+        nome: user.username || "Não informado",
+        email: user.email || "Não informado",
+        cpf: user.cpf || "",
+        phone_number: user.phone_number || "",
+        role: user.role === "admin" ? "Chefe de Obra" : "Terceirizado",
+      }));
+      setFuncionarios(users);
+      setLoading(false);
+    } catch (error) {
+      console.error("Erro ao buscar funcionários:", error);
+      setSnackbar("Erro ao carregar funcionários.");
+      if (snackbarTimeout.current) clearTimeout(snackbarTimeout.current);
+      snackbarTimeout.current = setTimeout(() => setSnackbar(""), 2000);
+      setLoading(false);
+    }
   };
 
-  const funcionariosFiltrados = funcionarios.filter(f => {
+  const handleUpdateFuncionario = async () => {
+    if (!funcionarioEditar) return;
+
+    const cleanedData = {
+      username: funcionarioEditar.nome,
+      email: funcionarioEditar.email,
+      cpf: unformat(funcionarioEditar.cpf),
+      phone_number: unformat(funcionarioEditar.phone_number),
+    };
+
+    if (cleanedData.cpf && !/^\d{11}$/.test(cleanedData.cpf)) {
+      setSnackbar("CPF deve conter 11 dígitos numéricos.");
+      if (snackbarTimeout.current) clearTimeout(snackbarTimeout.current);
+      snackbarTimeout.current = setTimeout(() => setSnackbar(""), 2000);
+      return;
+    }
+    if (cleanedData.phone_number && !/^\d{10,11}$/.test(cleanedData.phone_number)) {
+      setSnackbar("Telefone deve conter 10 ou 11 dígitos numéricos.");
+      if (snackbarTimeout.current) clearTimeout(snackbarTimeout.current);
+      snackbarTimeout.current = setTimeout(() => setSnackbar(""), 2000);
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanedData.email)) {
+      setSnackbar("E-mail inválido.");
+      if (snackbarTimeout.current) clearTimeout(snackbarTimeout.current);
+      snackbarTimeout.current = setTimeout(() => setSnackbar(""), 2000);
+      return;
+    }
+
+    try {
+      const response = await api.put(`/list-manage/${funcionarioEditar.id}/`, cleanedData);
+      setFuncionarios((prev) =>
+        prev.map((f) =>
+          f.id === funcionarioEditar.id
+            ? {
+                ...f,
+                nome: response.data.username || "Não informado",
+                email: response.data.email || "Não informado",
+                cpf: response.data.cpf || "",
+                phone_number: response.data.phone_number || "",
+                role: response.data.role === "admin" ? "Chefe de Obra" : "Terceirizado",
+              }
+            : f
+        )
+      );
+      setDisplayData({
+        cpf: formatCPF(response.data.cpf),
+        phone_number: formatPhoneNumber(response.data.phone_number),
+      });
+      setModalEditar(false);
+      setFuncionarioEditar(null);
+      setSnackbar("Funcionário editado com sucesso!");
+      if (snackbarTimeout.current) clearTimeout(snackbarTimeout.current);
+      snackbarTimeout.current = setTimeout(() => setSnackbar(""), 2000);
+    } catch (error) {
+      console.error("Erro ao atualizar funcionário:", error);
+      setSnackbar("Erro ao atualizar funcionário.");
+      if (snackbarTimeout.current) clearTimeout(snackbarTimeout.current);
+      snackbarTimeout.current = setTimeout(() => setSnackbar(""), 2000);
+    }
+  };
+
+  const handleRemoverFuncionario = async (id: string, nome: string) => {
+    setFuncionarioParaRemover({ id, nome });
+    setModalRemover(true);
+  };
+
+  const confirmarRemocaoFuncionario = async () => {
+    if (!funcionarioParaRemover) return;
+
+    try {
+      await api.delete(`/list-manage/${funcionarioParaRemover.id}/`);
+      setFuncionarios((prev) => prev.filter((f) => f.id !== funcionarioParaRemover.id));
+      setSnackbar(`Funcionário ${funcionarioParaRemover.nome} removido!`);
+      if (snackbarTimeout.current) clearTimeout(snackbarTimeout.current);
+      snackbarTimeout.current = setTimeout(() => setSnackbar(""), 2000);
+    } catch (error) {
+      console.error("Erro ao remover funcionário:", error);
+      setSnackbar("Erro ao remover funcionário.");
+      if (snackbarTimeout.current) clearTimeout(snackbarTimeout.current);
+      snackbarTimeout.current = setTimeout(() => setSnackbar(""), 2000);
+    } finally {
+      setFuncionarioParaRemover(null);
+      setModalRemover(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await AsyncStorage.removeItem("accessToken");
+      router.replace("/");
+    } catch (error) {
+      console.error("Erro ao fazer logout:", error);
+      setSnackbar("Erro ao realizar logout.");
+      if (snackbarTimeout.current) clearTimeout(snackbarTimeout.current);
+      snackbarTimeout.current = setTimeout(() => setSnackbar(""), 2000);
+    }
+  };
+
+  const funcionariosFiltrados = funcionarios.filter((f) => {
     const buscaLower = busca.toLowerCase();
     return (
       (!busca || f.nome.toLowerCase().includes(buscaLower) || f.email.toLowerCase().includes(buscaLower)) &&
-      (!filtroFuncao || (filtroFuncao === 'terceirizados' ? f.funcao !== 'Chefe de Obra' : f.funcao === filtroFuncao)) &&
-      (!filtroStatus || f.status === filtroStatus) &&
-      (!filtroObra || f.obraAtual === filtroObra)
+      (!filtroFuncao || (filtroFuncao === "Terceirizado" ? f.role !== "Chefe de Obra" : f.role === filtroFuncao))
     );
   });
 
-  const obrasUnicas = Array.from(new Set(funcionarios.map(f => f.obraAtual).filter(Boolean)));
-  
-  const handleUpdateFuncionario = () => {
-    if (funcionarioEditar) {
-        setFuncionarios(prev => prev.map(f => f.id === funcionarioEditar.id ? funcionarioEditar : f));
-        setHistorico(prev => [
-            { id: `h${Math.random() * 100000}`, acao: `Editou funcionário ${funcionarioEditar.nome}`, data: new Date().toLocaleString("pt-BR") },
-            ...prev,
-        ]);
-        setSnackbar("Funcionário editado com sucesso!");
-        if (snackbarTimeout.current) clearTimeout(snackbarTimeout.current);
-        snackbarTimeout.current = setTimeout(() => setSnackbar(""), 2000);
-        setModalEditar(false);
-        setFuncionarioEditar(null);
-    }
-  };
+  useEffect(() => {
+    fetchProfile();
+    fetchFuncionarios();
+  }, []);
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <Text style={styles.headerTitle}>Carregando...</Text>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -224,98 +240,80 @@ export default function ProfileScreen() {
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
-
         <View style={styles.profileCard}>
           <View style={styles.avatar}>
             <Ionicons name="person-circle-outline" size={90} color="#F4C542" />
           </View>
-          <Text style={styles.userName}>{USER.nome}</Text>
-          <Text style={styles.userEmail}>{USER.email}</Text>
-          <Text style={styles.userRole}>{userFuncao}</Text>
-          <Text style={styles.userInfo}>Empresa: <Text style={styles.userInfoValue}>{USER.empresa}</Text></Text>
-          <Text style={styles.userInfo}>CPF: <Text style={styles.userInfoValue}>{USER.cpf}</Text></Text>
-          <Text style={styles.userInfo}>Cadastrado em: <Text style={styles.userInfoValue}>{USER.dataCadastro}</Text></Text>
-          <Text style={styles.userInfo}>Total de funcionários: <Text style={styles.userInfoValue}>{funcionarios.length}</Text></Text>
+          <Text style={styles.userName}>{user.username}</Text>
+          <Text style={styles.userEmail}>{user.email}</Text>
+          <Text style={styles.userRole}>{user.role}</Text>
+          <Text style={styles.userInfo}>
+            CPF: <Text style={styles.userInfoValue}>{formatCPF(user.cpf)}</Text>
+          </Text>
+          <Text style={styles.userInfo}>
+            Telefone: <Text style={styles.userInfoValue}>{formatPhoneNumber(user.phone_number)}</Text>
+          </Text>
+          <Text style={styles.userInfo}>
+            Total de funcionários: <Text style={styles.userInfoValue}>{funcionarios.length}</Text>
+          </Text>
         </View>
 
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Funcionários</Text>
-            <TouchableOpacity style={styles.addBtn} onPress={() => setModalVisible(true)}>
+            <TouchableOpacity style={styles.addBtn} onPress={() => router.push("/auth/register" as const)}>
               <Ionicons name="person-add-outline" size={22} color="#F4C542" />
               <Text style={styles.addBtnText}>Adicionar</Text>
             </TouchableOpacity>
           </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 20, marginBottom: 10 }}>
-            <View style={{ flex: 1, backgroundColor: '#1A2A4F', borderRadius: 8, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: 20, marginBottom: 10 }}>
+            <View style={{ flex: 1, backgroundColor: "#1A2A4F", borderRadius: 8, flexDirection: "row", alignItems: "center", paddingHorizontal: 10 }}>
               <Ionicons name="search" size={18} color="#B0B3C7" />
               <TextInput
-                style={{ flex: 1, color: '#fff', fontSize: 15, paddingVertical: 8 }}
+                style={{ flex: 1, color: "#fff", fontSize: 15, paddingVertical: 8 }}
                 placeholder="Buscar por nome ou e-mail"
                 placeholderTextColor="#B0B3C7"
                 value={busca}
                 onChangeText={setBusca}
               />
             </View>
-            <TouchableOpacity onPress={() => setFiltroFuncao(filtroFuncao ? "" : "terceirizados")} style={{ backgroundColor: filtroFuncao ? '#F4C542' : '#1A2A4F', borderRadius: 8, padding: 8 }}>
-              <Ionicons name="hammer-outline" size={18} color={filtroFuncao ? '#0A1F44' : '#B0B3C7'} />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => setFiltroStatus(filtroStatus ? "" : "Ativo")} style={{ backgroundColor: filtroStatus ? '#F4C542' : '#1A2A4F', borderRadius: 8, padding: 8 }}>
-              <Ionicons name="checkmark-circle" size={18} color={filtroStatus ? '#0A1F44' : '#B0B3C7'} />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => setModalObra(true)} style={{ backgroundColor: filtroObra ? '#F4C542' : '#1A2A4F', borderRadius: 8, padding: 8 }}>
-              <Ionicons name="business-outline" size={18} color={filtroObra ? '#0A1F44' : '#B0B3C7'} />
+            <TouchableOpacity
+              onPress={() => setFiltroFuncao(filtroFuncao ? "" : "Terceirizado")}
+              style={{ backgroundColor: filtroFuncao ? "#F4C542" : "#1A2A4F", borderRadius: 8, padding: 8 }}
+            >
+              <Ionicons name="hammer-outline" size={18} color={filtroFuncao ? "#0A1F44" : "#B0B3C7"} />
             </TouchableOpacity>
           </View>
-          <Modal
-            visible={modalObra}
-            transparent
-            animationType="fade"
-            onRequestClose={() => setModalObra(false)}
-          >
-            <View style={styles.modalOverlay}>
-              <View style={styles.modalContent}>
-                <Text style={styles.modalTitle}>Filtrar por obra</Text>
-                <Pressable
-                  style={[styles.selectBtn, !filtroObra && styles.selectBtnActive]}
-                  onPress={() => { setFiltroObra(""); setModalObra(false); }}
-                >
-                  <Ionicons name="list" size={20} color="#F4C542" />
-                  <Text style={[styles.selectBtnText, !filtroObra && styles.selectBtnTextActive]}>Todas</Text>
-                </Pressable>
-                {obrasUnicas.map(obra => (
-                  <Pressable
-                    key={obra}
-                    style={[styles.selectBtn, filtroObra === obra && styles.selectBtnActive]}
-                    onPress={() => { setFiltroObra(obra); setModalObra(false); }}
-                  >
-                    <Ionicons name="business-outline" size={20} color={filtroObra === obra ? '#F4C542' : '#B0B3C7'} />
-                    <Text style={[styles.selectBtnText, filtroObra === obra && styles.selectBtnTextActive]}>{obra}</Text>
-                  </Pressable>
-                ))}
-                <TouchableOpacity style={[styles.cancelBtn, { marginTop: 10 }]} onPress={() => setModalObra(false)}>
-                  <Text style={styles.cancelBtnText}>Cancelar</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </Modal>
           <FlatList
             data={funcionariosFiltrados}
-            keyExtractor={item => item.id}
+            keyExtractor={(item) => item.id}
             renderItem={({ item }) => (
-              <View style={[styles.workerItem, { alignItems: 'flex-start', paddingVertical: 14 }]}>
-                <Ionicons name={FUNCOES_CIVIL.find(f => f.nome === item.funcao)?.icone as any || 'people-outline'} size={28} color="#F4C542" style={{ marginRight: 14, marginTop: 2 }} />
+              <View style={[styles.workerItem, { alignItems: "flex-start", paddingVertical: 14 }]}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.workerName}>{item.nome}</Text>
-                  <Text style={styles.workerFuncao}>{item.funcao} | {item.status} {item.obraAtual && `| ${item.obraAtual}`}</Text>
+                  <Text style={styles.workerFuncao}>{item.role}</Text>
                   <Text style={styles.workerEmail}>{item.email}</Text>
-                  <Text style={styles.workerFuncao}>Último ponto: {item.ultimoPonto}</Text>
+                  <Text style={styles.workerFuncao}>CPF: {formatCPF(item.cpf)}</Text>
+                  <Text style={styles.workerFuncao}>Telefone: {formatPhoneNumber(item.phone_number)}</Text>
                 </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 8, gap: 4 }}>
-                  <TouchableOpacity onPress={() => { setFuncionarioEditar({ ...item }); setModalEditar(true); }} style={{ padding: 4 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", marginLeft: 8, gap: 4 }}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setFuncionarioEditar({ ...item });
+                      setDisplayData({
+                        cpf: formatCPF(item.cpf),
+                        phone_number: formatPhoneNumber(item.phone_number),
+                      });
+                      setModalEditar(true);
+                    }}
+                    style={{ padding: 4 }}
+                  >
                     <Ionicons name="create-outline" size={22} color="#1976D2" />
                   </TouchableOpacity>
-                  <TouchableOpacity onPress={() => handleRemoverFuncionario(item.id, item.nome)} style={{ padding: 4 }}>
+                  <TouchableOpacity
+                    onPress={() => handleRemoverFuncionario(item.id, item.nome)}
+                    style={{ padding: 4 }}
+                  >
                     <Ionicons name="trash-outline" size={22} color="#F44336" />
                   </TouchableOpacity>
                 </View>
@@ -327,132 +325,74 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Histórico de Ações</Text>
-          <FlatList
-            data={historico}
-            keyExtractor={item => item.id}
-            renderItem={({ item }) => (
-              <View style={styles.historyItem}>
-                <Ionicons name="time-outline" size={18} color="#F4C542" style={{ marginRight: 8 }} />
-                <View>
-                  <Text style={styles.historyText}>{item.acao}</Text>
-                  <Text style={styles.historyDate}>{item.data}</Text>
-                </View>
-              </View>
-            )}
-            ListEmptyComponent={<Text style={styles.emptyText}>Nenhuma ação registrada.</Text>}
-            scrollEnabled={false}
-          />
-        </View>
-
-        <View style={styles.section}>
           <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
             <Ionicons name="log-out-outline" size={20} color="#F44336" style={{ marginRight: 8 }} />
-            <Text style={[styles.logoutText, { color: '#F44336' }]}>Sair</Text>
+            <Text style={[styles.logoutText, { color: "#F44336" }]}>Sair</Text>
           </TouchableOpacity>
         </View>
-
       </ScrollView>
 
       <Modal
-        visible={modalVisible}
+        visible={modalEditar && !!funcionarioEditar}
         transparent
         animationType="slide"
-        onRequestClose={() => setModalVisible(false)}
+        onRequestClose={() => setModalEditar(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Adicionar Funcionário</Text>
+          <View style={[styles.modalContent, { alignItems: "center", minWidth: 320, maxWidth: 400 }]}>
+            <Text style={styles.modalTitle}>Editar Funcionário</Text>
             <TextInput
               style={styles.input}
               placeholder="Nome"
               placeholderTextColor="#B0B3C7"
-              value={novoFuncionario.nome}
-              onChangeText={nome => setNovoFuncionario(prev => ({ ...prev, nome }))}
+              value={funcionarioEditar?.nome || ""}
+              onChangeText={(nome) => setFuncionarioEditar((prev: Funcionario | null) => prev && { ...prev, nome })}
             />
             <TextInput
               style={styles.input}
               placeholder="E-mail"
               placeholderTextColor="#B0B3C7"
               keyboardType="email-address"
-              value={novoFuncionario.email}
-              onChangeText={email => setNovoFuncionario(prev => ({ ...prev, email }))}
+              value={funcionarioEditar?.email || ""}
+              onChangeText={(email) => setFuncionarioEditar((prev: Funcionario | null) => prev && { ...prev, email })}
             />
-            <TouchableOpacity
-              style={[styles.input, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}
-              onPress={() => setModalFuncaoCivil(true)}
-              activeOpacity={0.8}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Ionicons name={FUNCOES_CIVIL.find((f: { nome: string; icone: string }) => f.nome === novoFuncionario.funcao)?.icone as keyof typeof Ionicons.glyphMap || 'person-outline'} size={18} color="#F4C542" />
-                <Text style={{ color: novoFuncionario.funcao ? '#fff' : '#B0B3C7', fontSize: 15 }}>
-                  {novoFuncionario.funcao || 'Selecione a função'}
-                </Text>
-              </View>
-              <Ionicons name="chevron-down" size={18} color="#B0B3C7" />
-            </TouchableOpacity>
-            <Modal
-              visible={modalFuncaoCivil}
-              transparent
-              animationType="fade"
-              onRequestClose={() => setModalFuncaoCivil(false)}
-            >
-              <View style={styles.modalOverlay}>
-                <View style={styles.modalContent}>
-                  <Text style={styles.modalTitle}>Selecione a função</Text>
-                  {FUNCOES_CIVIL.map((funcao: { nome: string; icone: string }) => (
-                    <Pressable
-                      key={funcao.nome}
-                      style={[styles.selectBtn, novoFuncionario.funcao === funcao.nome && styles.selectBtnActive]}
-                      onPress={() => { setNovoFuncionario(prev => ({ ...prev, funcao: funcao.nome })); setModalFuncaoCivil(false); }}
-                    >
-                      <Ionicons name={funcao.icone as keyof typeof Ionicons.glyphMap} size={20} color={novoFuncionario.funcao === funcao.nome ? '#F4C542' : '#B0B3C7'} />
-                      <Text style={[styles.selectBtnText, novoFuncionario.funcao === funcao.nome && styles.selectBtnTextActive]}>{funcao.nome}</Text>
-                    </Pressable>
-                  ))}
-                  <TouchableOpacity style={[styles.cancelBtn, { marginTop: 10 }]} onPress={() => setModalFuncaoCivil(false)}>
-                    <Text style={styles.cancelBtnText}>Cancelar</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </Modal>
             <TextInput
               style={styles.input}
               placeholder="CPF (000.000.000-00)"
               placeholderTextColor="#B0B3C7"
               keyboardType="numeric"
-              value={novoFuncionario.cpf}
-              onChangeText={cpf => setNovoFuncionario(prev => ({ ...prev, cpf }))}
+              value={displayData.cpf}
+              onChangeText={(text) => {
+                const cleaned = unformat(text);
+                setFuncionarioEditar((prev: Funcionario | null) => prev && { ...prev, cpf: cleaned });
+                setDisplayData({ ...displayData, cpf: formatCPF(cleaned) });
+              }}
               maxLength={14}
             />
             <TextInput
               style={styles.input}
-              placeholder="Obra atual"
+              placeholder="Telefone ((00) 00000-0000)"
               placeholderTextColor="#B0B3C7"
-              value={novoFuncionario.obraAtual}
-              onChangeText={obraAtual => setNovoFuncionario(prev => ({ ...prev, obraAtual }))}
+              keyboardType="phone-pad"
+              value={displayData.phone_number}
+              onChangeText={(text) => {
+                const cleaned = unformat(text);
+                setFuncionarioEditar((prev: Funcionario | null) => prev && { ...prev, phone_number: cleaned });
+                setDisplayData({ ...displayData, phone_number: formatPhoneNumber(cleaned) });
+              }}
+              maxLength={15}
             />
-            <TextInput
-              style={styles.input}
-              placeholder="Observações"
-              placeholderTextColor="#B0B3C7"
-              value={novoFuncionario.observacoes}
-              onChangeText={observacoes => setNovoFuncionario(prev => ({ ...prev, observacoes }))}
-            />
-            <View style={[styles.input, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#1A2A4F', marginBottom: 10 }]}>
-              <Text style={{ color: '#B0B3C7', fontSize: 15 }}>Status:</Text>
-              <TouchableOpacity onPress={() => setModalStatusFuncionario(true)} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Ionicons name={novoFuncionario.status === 'Ativo' ? 'checkmark-circle' : 'remove-circle'} size={20} color={novoFuncionario.status === 'Ativo' ? '#4CAF50' : '#B0B3C7'} />
-                <Text style={{ color: novoFuncionario.status === 'Ativo' ? '#4CAF50' : '#B0B3C7', fontWeight: 'bold' }}>{novoFuncionario.status}</Text>
-                <Ionicons name="chevron-down" size={16} color="#B0B3C7" />
-              </TouchableOpacity>
-            </View>
-            {feedback ? <Text style={styles.feedback}>{feedback}</Text> : null}
             <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.cancelBtn} onPress={() => { setModalVisible(false); setFeedback(""); }}>
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={() => {
+                  setModalEditar(false);
+                  setFuncionarioEditar(null);
+                }}
+              >
                 <Text style={styles.cancelBtnText}>Cancelar</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.saveBtn} onPress={handleAddFuncionario}>
+              <TouchableOpacity style={styles.saveBtn} onPress={handleUpdateFuncionario}>
                 <Text style={styles.saveBtnText}>Salvar</Text>
               </TouchableOpacity>
             </View>
@@ -470,151 +410,25 @@ export default function ProfileScreen() {
           <View style={styles.modalContent}>
             <Ionicons name="alert-circle-outline" size={40} color="#F44336" style={{ marginBottom: 12 }} />
             <Text style={styles.modalTitle}>Remover Funcionário</Text>
-            <Text style={{ color: '#fff', fontSize: 16, textAlign: 'center', marginBottom: 18 }}>
+            <Text style={{ color: "#fff", fontSize: 16, textAlign: "center", marginBottom: 18 }}>
               Tem certeza que deseja remover {funcionarioParaRemover?.nome} da equipe?
             </Text>
             <View style={styles.modalActions}>
               <TouchableOpacity style={styles.cancelBtn} onPress={() => setModalRemover(false)}>
                 <Text style={styles.cancelBtnText}>Cancelar</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.saveBtn, { backgroundColor: '#F44336' }]} onPress={confirmarRemocaoFuncionario}>
+              <TouchableOpacity style={[styles.saveBtn, { backgroundColor: "#F44336" }]} onPress={confirmarRemocaoFuncionario}>
                 <Text style={styles.saveBtnText}>Remover</Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
-      
-      <Modal
-        visible={modalEditar && !!funcionarioEditar}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setModalEditar(false)}
-      >
-        <View style={styles.modalOverlay}>
-            <View style={[styles.modalContent, { alignItems: 'center', minWidth: 320, maxWidth: 400 }]}>
-                <Text style={styles.modalTitle}>Editar Funcionário</Text>
-                <TextInput
-                    style={styles.input}
-                    placeholder="Nome"
-                    placeholderTextColor="#B0B3C7"
-                    value={funcionarioEditar?.nome || ''}
-                    onChangeText={nome => setFuncionarioEditar((prev: any) => ({ ...prev, nome }))}
-                />
-                <TextInput
-                    style={styles.input}
-                    placeholder="E-mail"
-                    placeholderTextColor="#B0B3C7"
-                    value={funcionarioEditar?.email || ''}
-                    onChangeText={email => setFuncionarioEditar((prev: any) => ({ ...prev, email }))}
-                />
-                <TouchableOpacity
-                    style={[styles.input, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}
-                    onPress={() => setModalFuncaoCivilEditar(true)}
-                    activeOpacity={0.8}
-                >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                        <Ionicons name={FUNCOES_CIVIL.find((f: { nome: string; icone: string }) => f.nome === funcionarioEditar?.funcao)?.icone as keyof typeof Ionicons.glyphMap || 'person-outline'} size={18} color="#F4C542" />
-                        <Text style={{ color: funcionarioEditar?.funcao ? '#fff' : '#B0B3C7', fontSize: 15 }}>
-                            {funcionarioEditar?.funcao || 'Selecione a função'}
-                        </Text>
-                    </View>
-                    <Ionicons name="chevron-down" size={18} color="#B0B3C7" />
-                </TouchableOpacity>
-                <TextInput
-                    style={styles.input}
-                    placeholder="Obra atual"
-                    placeholderTextColor="#B0B3C7"
-                    value={funcionarioEditar?.obraAtual || ''}
-                    onChangeText={obraAtual => setFuncionarioEditar((prev: any) => ({ ...prev, obraAtual }))}
-                />
-                <TextInput
-                    style={styles.input}
-                    placeholder="Observações"
-                    placeholderTextColor="#B0B3C7"
-                    value={funcionarioEditar?.observacoes || ''}
-                    onChangeText={observacoes => setFuncionarioEditar((prev: any) => ({ ...prev, observacoes }))}
-                />
-                <View style={[styles.input, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#1A2A4F', marginBottom: 10 }]}>
-                    <Text style={{ color: '#B0B3C7', fontSize: 15 }}>Status:</Text>
-                    <TouchableOpacity onPress={() => setModalStatusEditar(true)} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Ionicons name={funcionarioEditar?.status === 'Ativo' ? 'checkmark-circle' : 'remove-circle'} size={20} color={funcionarioEditar?.status === 'Ativo' ? '#4CAF50' : '#B0B3C7'} />
-                        <Text style={{ color: funcionarioEditar?.status === 'Ativo' ? '#4CAF50' : '#B0B3C7', fontWeight: 'bold' }}>{funcionarioEditar?.status}</Text>
-                        <Ionicons name="chevron-down" size={16} color="#B0B3C7" />
-                    </TouchableOpacity>
-                </View>
-                {feedback ? <Text style={styles.feedback}>{feedback}</Text> : null}
-                <View style={styles.modalActions}>
-                    <TouchableOpacity style={styles.cancelBtn} onPress={() => setModalEditar(false)}>
-                        <Text style={styles.cancelBtnText}>Cancelar</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.saveBtn} onPress={handleUpdateFuncionario}>
-                        <Text style={styles.saveBtnText}>Salvar</Text>
-                    </TouchableOpacity>
-                </View>
-            </View>
-        </View>
-      </Modal>
-
-      <Modal visible={modalFuncaoCivilEditar} transparent animationType="fade" onRequestClose={() => setModalFuncaoCivilEditar(false)}>
-          <View style={styles.modalOverlay}>
-              <View style={styles.modalContent}>
-                  <Text style={styles.modalTitle}>Selecione a função</Text>
-                  {FUNCOES_CIVIL.map((funcao) => (
-                      <Pressable key={funcao.nome} style={[styles.selectBtn, funcionarioEditar?.funcao === funcao.nome && styles.selectBtnActive]} onPress={() => { setFuncionarioEditar((prev: any) => ({ ...prev, funcao: funcao.nome })); setModalFuncaoCivilEditar(false); }}>
-                          <Ionicons name={funcao.icone as any} size={20} color={funcionarioEditar?.funcao === funcao.nome ? '#F4C542' : '#B0B3C7'} />
-                          <Text style={[styles.selectBtnText, funcionarioEditar?.funcao === funcao.nome && styles.selectBtnTextActive]}>{funcao.nome}</Text>
-                      </Pressable>
-                  ))}
-                  <TouchableOpacity style={[styles.cancelBtn, { marginTop: 10 }]} onPress={() => setModalFuncaoCivilEditar(false)}>
-                      <Text style={styles.cancelBtnText}>Cancelar</Text>
-                  </TouchableOpacity>
-              </View>
-          </View>
-      </Modal>
-      
-      <Modal visible={modalStatusFuncionario} transparent animationType="fade" onRequestClose={() => setModalStatusFuncionario(false)}>
-          <View style={styles.modalOverlay}>
-              <View style={styles.modalContent}>
-                  <Text style={styles.modalTitle}>Selecione o status</Text>
-                  <Pressable style={[styles.selectBtn, novoFuncionario.status === 'Ativo' && styles.selectBtnActive]} onPress={() => { setNovoFuncionario(prev => ({ ...prev, status: 'Ativo' })); setModalStatusFuncionario(false); }}>
-                      <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
-                      <Text style={[styles.selectBtnText, novoFuncionario.status === 'Ativo' && styles.selectBtnTextActive]}>Ativo</Text>
-                  </Pressable>
-                  <Pressable style={[styles.selectBtn, novoFuncionario.status === 'Inativo' && styles.selectBtnActive]} onPress={() => { setNovoFuncionario(prev => ({ ...prev, status: 'Inativo' })); setModalStatusFuncionario(false); }}>
-                      <Ionicons name="remove-circle" size={20} color="#B0B3C7" />
-                      <Text style={[styles.selectBtnText, novoFuncionario.status === 'Inativo' && styles.selectBtnTextActive]}>Inativo</Text>
-                  </Pressable>
-                   <TouchableOpacity style={[styles.cancelBtn, { marginTop: 10 }]} onPress={() => setModalStatusFuncionario(false)}>
-                      <Text style={styles.cancelBtnText}>Cancelar</Text>
-                  </TouchableOpacity>
-              </View>
-          </View>
-      </Modal>
-
-      <Modal visible={modalStatusEditar} transparent animationType="fade" onRequestClose={() => setModalStatusEditar(false)}>
-          <View style={styles.modalOverlay}>
-              <View style={styles.modalContent}>
-                  <Text style={styles.modalTitle}>Selecione o status</Text>
-                  <Pressable style={[styles.selectBtn, funcionarioEditar?.status === 'Ativo' && styles.selectBtnActive]} onPress={() => { setFuncionarioEditar((prev: any) => ({ ...prev, status: 'Ativo' })); setModalStatusEditar(false); }}>
-                      <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
-                      <Text style={[styles.selectBtnText, funcionarioEditar?.status === 'Ativo' && styles.selectBtnTextActive]}>Ativo</Text>
-                  </Pressable>
-                  <Pressable style={[styles.selectBtn, funcionarioEditar?.status === 'Inativo' && styles.selectBtnActive]} onPress={() => { setFuncionarioEditar((prev: any) => ({ ...prev, status: 'Inativo' })); setModalStatusEditar(false); }}>
-                      <Ionicons name="remove-circle" size={20} color="#B0B3C7" />
-                      <Text style={[styles.selectBtnText, funcionarioEditar?.status === 'Inativo' && styles.selectBtnTextActive]}>Inativo</Text>
-                  </Pressable>
-                   <TouchableOpacity style={[styles.cancelBtn, { marginTop: 10 }]} onPress={() => setModalStatusEditar(false)}>
-                      <Text style={styles.cancelBtnText}>Cancelar</Text>
-                  </TouchableOpacity>
-              </View>
-          </View>
-      </Modal>
 
       {snackbar ? (
-        <View style={{ position: 'absolute', bottom: 30, left: 0, right: 0, alignItems: 'center', zIndex: 99 }}>
-          <View style={{ backgroundColor: '#333', borderRadius: 8, paddingHorizontal: 24, paddingVertical: 12 }}>
-            <Text style={{ color: '#fff', fontSize: 15 }}>{snackbar}</Text>
+        <View style={{ position: "absolute", bottom: 30, left: 0, right: 0, alignItems: "center", zIndex: 99 }}>
+          <View style={{ backgroundColor: "#333", borderRadius: 8, paddingHorizontal: 24, paddingVertical: 12 }}>
+            <Text style={{ color: "#fff", fontSize: 15 }}>{snackbar}</Text>
           </View>
         </View>
       ) : null}
@@ -748,23 +562,6 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 10,
   },
-  historyItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#0A1F44",
-    borderRadius: 8,
-    padding: 10,
-    marginBottom: 8,
-  },
-  historyText: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "500",
-  },
-  historyDate: {
-    color: "#B0B3C7",
-    fontSize: 12,
-  },
   logoutBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -774,7 +571,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
   },
   logoutText: {
-    color: "#F4C542",
+    color: "#F44336",
     fontWeight: "bold",
     fontSize: 16,
   },
@@ -808,40 +605,6 @@ const styles = StyleSheet.create({
     width: "100%",
     marginBottom: 10,
   },
-  selectRow: {
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 8,
-    marginBottom: 10,
-  },
-  selectBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#1A2A4F",
-    borderRadius: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    marginBottom: 6,
-    width: '100%',
-  },
-  selectBtnActive: {
-    backgroundColor: "#F4C542",
-  },
-  selectBtnText: {
-    color: "#B0B3C7",
-    fontWeight: "600",
-    marginLeft: 8,
-    fontSize: 14,
-  },
-  selectBtnTextActive: {
-    color: "#0A1F44",
-  },
-  feedback: {
-    color: "#F4C542",
-    fontSize: 14,
-    marginBottom: 8,
-    textAlign: "center",
-  },
   modalActions: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -855,8 +618,8 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingVertical: 10,
     alignItems: "center",
-    flexDirection: 'row',
-    justifyContent: 'center',
+    flexDirection: "row",
+    justifyContent: "center",
   },
   cancelBtnText: {
     color: "#B0B3C7",
@@ -869,40 +632,12 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingVertical: 10,
     alignItems: "center",
-    flexDirection: 'row',
-    justifyContent: 'center',
+    flexDirection: "row",
+    justifyContent: "center",
   },
   saveBtnText: {
     color: "#0A1F44",
     fontWeight: "bold",
     fontSize: 15,
-  },
-  avatarDetalhe: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#1A2A4F',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-    borderWidth: 2,
-    borderColor: '#F4C542',
-  },
-  avatarInicial: {
-    color: '#F4C542',
-    fontSize: 28,
-    fontWeight: 'bold',
-  },
-  detalheLabel: {
-    color: '#B0B3C7',
-    fontSize: 13,
-    marginTop: 6,
-    fontWeight: '600',
-  },
-  detalheValor: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '500',
-    marginBottom: 2,
   },
 });

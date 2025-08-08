@@ -1,29 +1,34 @@
 import React, { useState, useEffect, useRef } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Dimensions, Linking } from "react-native";
-import { CameraView, useCameraPermissions } from "expo-camera";
-import { ButtonLogin } from "../ButtonLogin"; // Ajuste o caminho se necessário
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Dimensions, ScrollView, Linking } from "react-native";
+import { CameraView, useCameraPermissions, CameraPictureOptions } from "expo-camera";
+import { ButtonLogin } from "../ButtonLogin"; 
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { saveUserType } from "../../utils/userType";
+import api from "../../services/api";
+import { AxiosError } from "axios";
 
-const { width, height } = Dimensions.get("window");
+const { width } = Dimensions.get("window");
 
 interface UserData {
-  nome: string;
+  username: string;
   email: string;
   cpf: string;
-  funcao: string;
-  senha: string;
-  confirmarSenha: string;
+  phone_number: string;
+  password: string;
+  confirm_password: string;
+  role: string;
 }
 
 export default function FacialRecognitionRegister() {
-  const cameraRef = useRef<any>(null); // Ajustado para 'any' temporariamente
+  const cameraRef = useRef<CameraView>(null);
   const [permission, requestPermission] = useCameraPermissions();
   const [isScanning, setIsScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
   const [userData, setUserData] = useState<UserData | null>(null);
   const [faceDetected, setFaceDetected] = useState(false);
+  const [cameraType, setCameraType] = useState<"front" | "back">("front");
   const params = useLocalSearchParams();
 
   useEffect(() => {
@@ -33,6 +38,11 @@ export default function FacialRecognitionRegister() {
     if (params.userData) {
       try {
         const data = JSON.parse(params.userData as string);
+        const requiredFields = ["username", "email", "cpf", "phone_number", "password", "confirm_password", "role"];
+        const missingFields = requiredFields.filter((field) => !data[field]);
+        if (missingFields.length > 0) {
+          throw new Error(`Campos obrigatórios ausentes: ${missingFields.join(", ")}`);
+        }
         setUserData(data);
       } catch (error) {
         console.error("Erro ao carregar dados do usuário:", error);
@@ -46,11 +56,21 @@ export default function FacialRecognitionRegister() {
   }, [params.userData, permission, requestPermission]);
 
   const handleStartScan = async () => {
-    if (!permission?.granted || !cameraRef.current) {
+    if (!permission?.granted) {
       Alert.alert("Erro", "Permissão de câmera não concedida.", [
         { text: "Abrir Configurações", onPress: () => Linking.openSettings() },
         { text: "OK" },
       ]);
+      return;
+    }
+
+    if (!cameraRef.current) {
+      Alert.alert("Erro", "Câmera não inicializada.");
+      return;
+    }
+
+    if (!userData) {
+      Alert.alert("Erro", "Dados do usuário não encontrados.");
       return;
     }
 
@@ -59,13 +79,66 @@ export default function FacialRecognitionRegister() {
     setFaceDetected(false);
 
     try {
-      const photo = await cameraRef.current.takePhotoAsync({ base64: true });
-      console.log("Foto capturada:", photo.uri);
-      setTimeout(() => {
-        setFaceDetected(true);
-      }, 2000);
+      const options: CameraPictureOptions = { base64: true, quality: 0.8 };
+      const photo = await cameraRef.current.takePictureAsync(options);
+
+      if (!photo) {
+        throw new Error("Falha ao capturar a imagem.");
+      }
+
+      const formData = new FormData();
+      formData.append("face_image", {
+        uri: photo.uri,
+        type: "image/jpeg",
+        name: "face_image.jpg",
+      } as any);
+      formData.append("username", userData.username);
+      formData.append("email", userData.email);
+      formData.append("cpf", userData.cpf);
+      formData.append("phone_number", userData.phone_number.replace(/\D/g, ""));
+      formData.append("password", userData.password);
+      formData.append("confirm_password", userData.confirm_password);
+      formData.append("role", userData.role || "user");
+
+      const response = await api.post("/register/", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+
+      setFaceDetected(true);
+      setUserData({
+        username: response.data.user.username,
+        email: response.data.user.email,
+        cpf: response.data.user.cpf,
+        phone_number: response.data.user.phone_number,
+        password: userData.password,
+        confirm_password: userData.confirm_password,
+        role: response.data.user.role,
+      });
+
+      await AsyncStorage.setItem("accessToken", response.data.access);
+      await AsyncStorage.setItem("refreshToken", response.data.refresh);
+
+      console.log("Tokens recebidos:", {
+        refresh: response.data.refresh,
+        access: response.data.access,
+      });
+
+      handleScanComplete();
     } catch (error) {
-      Alert.alert("Erro", "Falha ao capturar a foto.");
+      if (error instanceof AxiosError) {
+        console.error("Erro ao registrar usuário:", error.response?.data || error.message);
+        const errorMessage =
+          error.response?.data?.error ||
+          error.response?.data?.password?.[0] ||
+          error.response?.data?.face_image?.[0] ||
+          "Falha ao registrar usuário.";
+        Alert.alert("Erro", errorMessage);
+      } else {
+        console.error("Erro desconhecido:", error);
+        Alert.alert("Erro", "Erro inesperado ao registrar usuário.");
+      }
       setIsScanning(false);
     }
 
@@ -73,8 +146,6 @@ export default function FacialRecognitionRegister() {
       setScanProgress((prev) => {
         if (prev >= 100) {
           clearInterval(interval);
-          setIsScanning(false);
-          handleScanComplete();
           return 100;
         }
         return prev + 10;
@@ -88,7 +159,7 @@ export default function FacialRecognitionRegister() {
       return;
     }
 
-    console.log("Dados do usuário para salvar:", userData);
+    console.log("Dados do usuário registrados:", userData);
     console.log("Foto facial capturada e processada");
 
     Alert.alert(
@@ -98,47 +169,31 @@ export default function FacialRecognitionRegister() {
         {
           text: "OK",
           onPress: () => {
-            console.log("Salvando tipo de usuário no reconhecimento facial:", userData.funcao, "para email:", userData.email);
-            saveUserType(userData.email, userData.funcao);
-            
+            console.log("Salvando tipo de usuário:", userData.role, "para email:", userData.email);
+            saveUserType(userData.email, userData.role);
+
             Alert.alert(
               "Conta Criada",
-              `Conta criada com sucesso para ${userData.nome}!`,
+              `Conta criada com sucesso para ${userData.username}!`,
               [
                 {
                   text: "OK",
                   onPress: () => {
                     console.log("Redirecionando para login após reconhecimento facial");
-                    router.replace("/");
-                  }
-                }
+                    router.replace("/manager/profile");
+                  },
+                },
               ]
             );
-          }
-        }
+          },
+        },
       ]
     );
   };
 
-  const handleCaptureImage = async () => {
-    if (!permission?.granted || !cameraRef.current) {
-      Alert.alert("Erro", "Permissão de câmera não concedida.", [
-        { text: "Abrir Configurações", onPress: () => Linking.openSettings() },
-        { text: "OK" },
-      ]);
-      return;
-    }
+  const handleToggleCamera = () => setCameraType((prev) => (prev === "front" ? "back" : "front"));
 
-    try {
-      const photo = await cameraRef.current.takePhotoAsync({ base64: true });
-      Alert.alert("Foto Capturada", "Imagem salva com sucesso!", [
-        { text: "OK" }
-      ]);
-      console.log("Foto capturada:", photo.uri);
-    } catch (error) {
-      Alert.alert("Erro", "Falha ao capturar a foto.");
-    }
-  };
+  const handleBackToHome = () => router.back();
 
   if (!permission) {
     return <View style={styles.container} />;
@@ -146,7 +201,7 @@ export default function FacialRecognitionRegister() {
 
   if (!permission.granted) {
     return (
-      <View style={styles.container}>
+      <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
         <Text style={styles.message}>Precisamos da sua permissão para usar a câmera</Text>
         <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
           <Text style={styles.permissionText}>Conceder Permissão</Text>
@@ -157,15 +212,23 @@ export default function FacialRecognitionRegister() {
         >
           <Text style={styles.permissionText}>Abrir Configurações</Text>
         </TouchableOpacity>
-      </View>
+      </ScrollView>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={handleBackToHome} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color="#F4C542" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Registro Facial</Text>
+        <View style={{ width: 40 }} />
+      </View>
+
       <Text style={styles.title}>Reconhecimento Facial</Text>
       <Text style={styles.subtitle}>Posicione seu rosto na área indicada</Text>
-      
+
       {userData && (
         <View style={styles.userInfoContainer}>
           {faceDetected ? (
@@ -180,36 +243,38 @@ export default function FacialRecognitionRegister() {
             </View>
           )}
           <Text style={styles.userInfoTitle}>Dados do Cadastro:</Text>
-          <Text style={styles.userInfoText}>Nome: {userData.nome}</Text>
+          <Text style={styles.userInfoText}>Nome de Usuário: {userData.username}</Text>
           <Text style={styles.userInfoText}>Email: {userData.email}</Text>
           <Text style={styles.userInfoText}>CPF: {userData.cpf}</Text>
-          <Text style={styles.userInfoText}>Função: {userData.funcao}</Text>
+          <Text style={styles.userInfoText}>Telefone: {userData.phone_number}</Text>
+          <Text style={styles.userInfoText}>Função: {userData.role}</Text>
         </View>
       )}
 
       <View style={styles.scanArea}>
+        <TouchableOpacity style={styles.flipButton} onPress={handleToggleCamera}>
+          <Ionicons name="camera-reverse-outline" size={24} color="#F4C542" />
+        </TouchableOpacity>
         <CameraView
           ref={cameraRef}
           style={styles.cameraFrame}
-          facing="front"
+          facing={cameraType}
           ratio="4:3"
         />
       </View>
 
       <View style={styles.instructionsContainer}>
         <Text style={styles.instructionsTitle}>Instruções:</Text>
-        <View style={styles.instructionItem}>
-          <Ionicons name="checkmark-circle" size={14} color="#F4C542" />
-          <Text style={styles.instructionText}>Mantenha o rosto bem iluminado</Text>
-        </View>
-        <View style={styles.instructionItem}>
-          <Ionicons name="checkmark-circle" size={14} color="#F4C542" />
-          <Text style={styles.instructionText}>Olhe diretamente para a câmera</Text>
-        </View>
-        <View style={styles.instructionItem}>
-          <Ionicons name="checkmark-circle" size={14} color="#F4C542" />
-          <Text style={styles.instructionText}>Mantenha-se a uma distância adequada</Text>
-        </View>
+        {[
+          "Mantenha o rosto bem iluminado",
+          "Olhe diretamente para a câmera",
+          "Mantenha-se a uma distância adequada",
+        ].map((instruction, i) => (
+          <View style={styles.instructionItem} key={i}>
+            <Ionicons name="checkmark-circle" size={14} color="#F4C542" />
+            <Text style={styles.instructionText}>{instruction}</Text>
+          </View>
+        ))}
       </View>
 
       <View style={styles.buttonContainer}>
@@ -223,14 +288,6 @@ export default function FacialRecognitionRegister() {
               textColor="#333"
               iconColor="#333"
             />
-            <ButtonLogin
-              icon="image"
-              title="Capturar Imagem"
-              onPress={handleCaptureImage}
-              backgroundColor="#4CAF50"
-              textColor="#FFFFFF"
-              iconColor="#FFFFFF"
-            />
           </View>
         ) : (
           <View style={styles.scanningButton}>
@@ -239,7 +296,7 @@ export default function FacialRecognitionRegister() {
           </View>
         )}
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
@@ -247,9 +304,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#0A1F44",
+  },
+  scrollContent: {
     paddingHorizontal: 24,
-    paddingTop: 40,
-    paddingBottom: 20,
+    paddingTop: 16,
+    paddingBottom: 24,
   },
   message: {
     color: "#FFFFFF",
@@ -269,24 +328,42 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
   },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingTop: 32,
+    paddingBottom: 10,
+  },
+  backButton: {
+    padding: 8,
+  },
+  headerTitle: {
+    color: "#F4C542",
+    fontSize: 22,
+    fontWeight: "bold",
+    textAlign: "center",
+    flex: 1,
+  },
   title: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: "700",
     color: "#FFFFFF",
     textAlign: "center",
-    marginBottom: 8,
+    marginBottom: 6,
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 14,
     color: "#B0B3C7",
     textAlign: "center",
-    marginBottom: 16,
+    marginBottom: 12,
   },
   userInfoContainer: {
     backgroundColor: "#142850",
     borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
+    padding: 12,
+    marginBottom: 16,
     borderWidth: 1,
     borderColor: "#1A2A4F",
   },
@@ -303,18 +380,18 @@ const styles = StyleSheet.create({
   },
   userInfoTitle: {
     color: "#F4C542",
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "600",
-    marginBottom: 8,
+    marginBottom: 6,
   },
   userInfoText: {
     color: "#FFFFFF",
-    fontSize: 14,
-    marginBottom: 4,
+    fontSize: 12,
+    marginBottom: 3,
   },
   scanArea: {
     alignItems: "center",
-    marginBottom: 20,
+    marginBottom: 16,
   },
   cameraFrame: {
     width: width * 0.8,
@@ -324,28 +401,35 @@ const styles = StyleSheet.create({
     borderColor: "#F4C542",
     overflow: "hidden",
   },
+  flipButton: {
+    alignSelf: "center",
+    marginBottom: 10,
+    backgroundColor: "#1A2A4F",
+    padding: 10,
+    borderRadius: 30,
+  },
   instructionsContainer: {
     backgroundColor: "#142850",
     borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
+    padding: 12,
+    marginBottom: 16,
     borderWidth: 1,
     borderColor: "#1A2A4F",
   },
   instructionsTitle: {
     color: "#F4C542",
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "600",
-    marginBottom: 12,
+    marginBottom: 8,
   },
   instructionItem: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 8,
+    marginBottom: 6,
   },
   instructionText: {
     color: "#FFFFFF",
-    fontSize: 14,
+    fontSize: 12,
     marginLeft: 8,
   },
   buttonContainer: {

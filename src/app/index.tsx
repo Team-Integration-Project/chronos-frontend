@@ -124,13 +124,6 @@ export default function SignIn() {
             iconColor="#333"
             disabled={loading}
           />
-
-          <View style={styles.signUpContainer}>
-            <Text style={styles.noAccountText}>Não tem uma conta? </Text>
-            <TouchableOpacity onPress={() => router.push("/auth/register")} disabled={loading}>
-              <Text style={styles.signUpText}>Cadastre-se</Text>
-            </TouchableOpacity>
-          </View>
         </View>
       </View>
     </View>
