@@ -21,7 +21,7 @@ export default function ReportIndividualScreen() {
     const fetchUserAttendance = async () => {
       try {
         setLoading(true);
-        const response = await api.get(`/attendance/${userId}/?period=${period}`); // Corrigido para remover /api/ duplicado
+        const response = await api.get(`/attendance/${userId}/?period=${period}`);
         const { attendances: data, total_attendances, stats: newStats } = response.data;
         setAttendances(data);
         setTotalAttendances(total_attendances);

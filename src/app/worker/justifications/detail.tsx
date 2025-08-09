@@ -1,7 +1,8 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, TextInput, KeyboardAvoidingView, Platform, Alert, Linking } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, TextInput, KeyboardAvoidingView, Platform, Alert } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, router } from "expo-router";
+import api from "@/services/api"; // Importar o serviço de API
 
 const TYPE_LABELS: Record<string, { title: string; icon: any }> = {
   atraso: { title: "Atraso", icon: "time-outline" },
@@ -24,10 +25,24 @@ export default function JustificationDetailScreen() {
       return;
     }
     setSubmitting(true);
-    setTimeout(() => {
+  
+    try {
+      const response = await api.post("/justification/", { // Ajustado para /api/justification/ para alinhar com urls.py
+        date: new Date().toISOString().split("T")[0], // Data atual no formato YYYY-MM-DD
+        reason: reason,
+      });
+  
+      if (response.status === 201) {
+        router.replace({ pathname: "/worker/justifications/confirmation", params: { type } });
+      } else {
+        Alert.alert("Erro", "Falha ao enviar a justificativa. Tente novamente.");
+      }
+    } catch (error) {
+      console.error("Erro ao enviar justificativa:", error);
+      Alert.alert("Erro", "Ocorreu um problema ao enviar a justificativa. Verifique sua conexão ou tente novamente.");
+    } finally {
       setSubmitting(false);
-      router.replace({ pathname: "/worker/justifications/confirmation", params: { type } });
-    }, 1200);
+    }
   };
 
   return (
@@ -58,7 +73,7 @@ export default function JustificationDetailScreen() {
           <Text style={styles.submitBtnText}>{submitting ? "Enviando..." : "Enviar justificativa"}</Text>
         </TouchableOpacity>
         <View style={styles.actionsSection}>
-          <TouchableOpacity style={styles.actionButton} onPress={() => router.push("/help" as any)}> 
+          <TouchableOpacity style={styles.actionButton} onPress={() => router.push("/help" as any)}>
             <Ionicons name="help-circle-outline" size={24} color="#F4C542" />
             <Text style={styles.actionButtonText}>Ajuda</Text>
           </TouchableOpacity>
@@ -163,4 +178,4 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     marginLeft: 10,
   },
-}); 
+});

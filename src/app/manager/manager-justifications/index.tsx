@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -12,43 +12,9 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import api from "@/services/api";
 
-const MOCK_JUSTIFICATIONS: Justification[] = [
-  {
-    id: "1",
-    employee: "Carlos Souza",
-    reason: "Atraso devido a transporte",
-    date: "2024-06-10",
-    status: "pendente",
-    details: "O ônibus quebrou no caminho e precisei esperar outro.",
-  },
-  {
-    id: "2",
-    employee: "Maria Oliveira",
-    reason: "Consulta médica",
-    date: "2024-06-09",
-    status: "aprovada",
-    details: "Consulta marcada previamente, trouxe atestado.",
-  },
-  {
-    id: "3",
-    employee: "João Lima",
-    reason: "Problema familiar",
-    date: "2024-06-08",
-    status: "recusada",
-    details: "Precisei resolver um problema urgente em casa.",
-  },
-  {
-    id: "4",
-    employee: "Ana Paula",
-    reason: "Atraso devido à chuva",
-    date: "2024-06-10",
-    status: "pendente",
-    details: "Choveu muito forte e o trânsito ficou parado.",
-  },
-];
-
-type Status = 'pendente' | 'aprovada' | 'recusada';
+type Status = "pendente" | "aprovada" | "recusada";
 
 interface Justification {
   id: string;
@@ -68,26 +34,101 @@ const STATUS_COLORS: Record<Status, string> = {
 const { width } = Dimensions.get("window");
 
 export default function ManagerJustificationsScreen() {
-  const [justifications, setJustifications] = useState<Justification[]>(MOCK_JUSTIFICATIONS);
+  const [justifications, setJustifications] = useState<Justification[]>([]);
   const [selected, setSelected] = useState<Justification | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  const handleApprove = (id: string) => {
-    setJustifications((prev) =>
-      prev.map((j) =>
-        j.id === id ? { ...j, status: "aprovada" } : j
-      )
-    );
-    setModalVisible(false);
+  // Função para buscar justificativas
+  const fetchJustifications = async () => {
+    try {
+      setLoading(true);
+      const response = await api.get("/justification/");
+      console.log("Resposta da API:", response.data); // Depuração
+      if (response.status === 200) {
+        const data = response.data.map((item: any) => ({
+          id: item.id ? item.id.toString() : "N/A",
+          employee: item.user || "Desconhecido",
+          reason: item.reason || "Sem motivo",
+          date: item.date || item.created_at.split("T")[0] || "N/A",
+          status: item.approval === true ? "aprovada" : item.approval === false ? "recusada" : "pendente",
+          details: item.reason || "Sem detalhes",
+        }));
+        setJustifications(data);
+      } else {
+        Alert.alert("Erro", "Falha ao carregar as justificativas.");
+      }
+    } catch (error) {
+      console.error("Erro ao buscar justificativas:", error);
+      Alert.alert("Erro", "Não foi possível carregar as justificativas. Verifique sua conexão ou permissões.");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleReject = (id: string) => {
+  // Efeito para carregar justificativas ao montar o componente
+  useEffect(() => {
+    fetchJustifications();
+  }, []);
+
+  const handleApprove = async (id: string) => {
+    // Atualização imediata no estado local
     setJustifications((prev) =>
-      prev.map((j) =>
-        j.id === id ? { ...j, status: "recusada" } : j
-      )
+      prev.map((j) => (j.id === id ? { ...j, status: "aprovada" } : j))
     );
-    setModalVisible(false);
+    try {
+      const response = await api.post(`/justification/${id}/approve/`, { approved: true });
+      console.log("Resposta de aprovação:", response.data); // Depuração
+      if (response.status === 200) {
+        await fetchJustifications(); // Sincroniza com o servidor
+        setModalVisible(false);
+        Alert.alert("Sucesso", "Justificativa aprovada com sucesso!");
+      }
+    } catch (error) {
+      console.error("Erro ao aprovar justificativa:", error);
+      // Reverte a mudança local se a API falhar
+      setJustifications((prev) =>
+        prev.map((j) => (j.id === id ? { ...j, status: "pendente" } : j))
+      );
+      Alert.alert("Erro", "Falha ao aprovar a justificativa. Verifique suas permissões ou tente novamente.");
+    }
+  };
+
+  const handleReject = async (id: string) => {
+    // Atualização imediata no estado local
+    setJustifications((prev) =>
+      prev.map((j) => (j.id === id ? { ...j, status: "recusada" } : j))
+    );
+    try {
+      const response = await api.post(`/justification/${id}/approve/`, { approved: false });
+      console.log("Resposta de rejeição:", response.data); // Depuração
+      if (response.status === 200) {
+        await fetchJustifications(); // Sincroniza com o servidor
+        setModalVisible(false);
+        Alert.alert("Sucesso", "Justificativa rejeitada com sucesso!");
+      }
+    } catch (error) {
+      console.error("Erro ao rejeitar justificativa:", error);
+      // Reverte a mudança local se a API falhar
+      setJustifications((prev) =>
+        prev.map((j) => (j.id === id ? { ...j, status: "pendente" } : j))
+      );
+      Alert.alert("Erro", "Falha ao rejeitar a justificativa. Verifique suas permissões ou tente novamente.");
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      const response = await api.delete(`/justification/${id}/`);
+      if (response.status === 204) {
+        setJustifications((prev) => prev.filter((j) => j.id !== id));
+        setModalVisible(false);
+        Alert.alert("Sucesso", "Justificativa deletada com sucesso!");
+      }
+    } catch (error) {
+      console.error("Erro ao deletar justificativa:", error);
+      Alert.alert("Erro", "Falha ao deletar a justificativa. Verifique suas permissões ou tente novamente.");
+    }
   };
 
   const openDetails = (item: Justification) => {
@@ -105,13 +146,30 @@ export default function ManagerJustificationsScreen() {
       <Text style={styles.employee}>{item.employee}</Text>
       <View style={styles.rowBetween}>
         <Text style={styles.reason}>{item.reason}</Text>
-        <View style={[styles.status, { backgroundColor: STATUS_COLORS[item.status] }]}> 
+        <View style={[styles.status, { backgroundColor: STATUS_COLORS[item.status] }]}>
           <Text style={styles.statusText}>{item.status.charAt(0).toUpperCase() + item.status.slice(1)}</Text>
         </View>
       </View>
       <Text style={styles.date}>{item.date}</Text>
     </TouchableOpacity>
   );
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <Ionicons name="arrow-back" size={24} color="#F4C542" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitleYellow}>Justificativas Recebidas</Text>
+          <View style={{ width: 32 }} />
+        </View>
+        <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+          <Text style={{ color: "#B0B3C7", fontSize: 16 }}>Carregando...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -154,7 +212,7 @@ export default function ManagerJustificationsScreen() {
                 <Text style={styles.modalValue}>{selected.details}</Text>
                 <View style={styles.modalStatusRow}>
                   <Text style={styles.modalLabel}>Status:</Text>
-                  <View style={[styles.statusModal, { backgroundColor: STATUS_COLORS[selected.status] }]}> 
+                  <View style={[styles.statusModal, { backgroundColor: STATUS_COLORS[selected.status] }]}>
                     <Text style={styles.statusTextModal}>{selected.status.charAt(0).toUpperCase() + selected.status.slice(1)}</Text>
                   </View>
                 </View>
@@ -170,6 +228,10 @@ export default function ManagerJustificationsScreen() {
                     </TouchableOpacity>
                   </View>
                 )}
+                <TouchableOpacity style={[styles.actionBtn, { backgroundColor: "#FF6B6B", marginTop: 10 }]} onPress={() => handleDelete(selected.id)}>
+                  <Ionicons name="trash" size={20} color="#fff" style={{ marginRight: 6 }} />
+                  <Text style={styles.actionText}>Deletar</Text>
+                </TouchableOpacity>
                 <TouchableOpacity style={styles.closeBtn} onPress={closeModal}>
                   <Ionicons name="close" size={20} color="#B0B3C7" />
                   <Text style={styles.closeText}>Fechar</Text>
@@ -318,8 +380,8 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingVertical: 10,
     alignItems: "center",
-    flexDirection: 'row',
-    justifyContent: 'center',
+    flexDirection: "row",
+    justifyContent: "center",
     marginRight: 0,
   },
   actionText: {
@@ -418,10 +480,10 @@ const styles = StyleSheet.create({
     marginLeft: 10,
   },
   statusModalWrapper: {
-    width: '100%',
-    alignItems: 'flex-start',
+    width: "100%",
+    alignItems: "flex-start",
     marginTop: 2,
     marginBottom: 8,
     paddingLeft: 0,
   },
-}); 
+});
