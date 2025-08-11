@@ -9,6 +9,7 @@ import {
   Modal,
   Alert,
   Dimensions,
+  ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -38,23 +39,54 @@ export default function ManagerJustificationsScreen() {
   const [selected, setSelected] = useState<Justification | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  // Função melhorada para mapear status
+  const mapJustificationStatus = (item: any): Status => {
+    console.log(`Mapeando status para item ${item.id}:`, {
+      approval: item.approval,
+      approved: item.approved,
+      status: item.status
+    });
+
+    // Lógica de mapeamento mais robusta
+    if (item.status === 'aprovada' || item.status === 'approved') {
+      return "aprovada";
+    } else if (item.status === 'recusada' || item.status === 'rejected') {
+      return "recusada";
+    } else if (item.approval === true || item.approved === true) {
+      return "aprovada";
+    } else if (item.approval === false || item.approved === false) {
+      return "recusada";
+    } else {
+      return "pendente";
+    }
+  };
 
   // Função para buscar justificativas
   const fetchJustifications = async () => {
     try {
       setLoading(true);
       const response = await api.get("/justification/");
-      console.log("Resposta da API:", response.data); // Depuração
+      console.log("Resposta completa da API:", response.data);
+      
       if (response.status === 200) {
-        const data = response.data.map((item: any) => ({
-          id: item.id ? item.id.toString() : "N/A",
-          employee: item.user || "Desconhecido",
-          reason: item.reason || "Sem motivo",
-          date: item.date || item.created_at.split("T")[0] || "N/A",
-          status: item.approval === true ? "aprovada" : item.approval === false ? "recusada" : "pendente",
-          details: item.reason || "Sem detalhes",
-        }));
+        const data = response.data.map((item: any) => {
+          const mappedItem = {
+            id: item.id ? item.id.toString() : "N/A",
+            employee: item.user || item.employee || "Desconhecido",
+            reason: item.reason || "Sem motivo",
+            date: item.date || (item.created_at ? item.created_at.split("T")[0] : "N/A"),
+            status: mapJustificationStatus(item),
+            details: item.reason || item.details || "Sem detalhes",
+          };
+          
+          console.log(`Item ${item.id} mapeado:`, mappedItem);
+          return mappedItem;
+        });
+        
         setJustifications(data);
+        console.log("Justificativas carregadas:", data);
       } else {
         Alert.alert("Erro", "Falha ao carregar as justificativas.");
       }
@@ -72,64 +104,84 @@ export default function ManagerJustificationsScreen() {
   }, []);
 
   const handleApprove = async (id: string) => {
-    // Atualização imediata no estado local
-    setJustifications((prev) =>
-      prev.map((j) => (j.id === id ? { ...j, status: "aprovada" } : j))
-    );
     try {
-      const response = await api.post(`/justification/${id}/approve/`, { approved: true });
-      console.log("Resposta de aprovação:", response.data); // Depuração
+      setActionLoading(id);
+      console.log(`Tentando aprovar justificativa ${id}`);
+      
+      const response = await api.post(`/justification/${id}/approve/`, { 
+        approved: true,
+        approval: true
+      });
+      
+      console.log("Resposta de aprovação:", response.data);
+      
       if (response.status === 200) {
-        await fetchJustifications(); // Sincroniza com o servidor
-        setModalVisible(false);
+        // Atualizar estado local imediatamente para feedback visual
+        setJustifications((prev) =>
+          prev.map((j) => (j.id === id ? { ...j, status: "aprovada" } : j))
+        );
+        
+        // Atualizar item selecionado se for o mesmo
+        if (selected && selected.id === id) {
+          setSelected({ ...selected, status: "aprovada" });
+        }
+        
         Alert.alert("Sucesso", "Justificativa aprovada com sucesso!");
+        
+        // Recarregar dados em background para sincronizar
+        setTimeout(fetchJustifications, 1000);
+        
+      } else {
+        throw new Error(`Status inesperado: ${response.status}`);
       }
     } catch (error) {
       console.error("Erro ao aprovar justificativa:", error);
-      // Reverte a mudança local se a API falhar
-      setJustifications((prev) =>
-        prev.map((j) => (j.id === id ? { ...j, status: "pendente" } : j))
-      );
       Alert.alert("Erro", "Falha ao aprovar a justificativa. Verifique suas permissões ou tente novamente.");
+    } finally {
+      setActionLoading(null);
     }
   };
 
   const handleReject = async (id: string) => {
-    // Atualização imediata no estado local
-    setJustifications((prev) =>
-      prev.map((j) => (j.id === id ? { ...j, status: "recusada" } : j))
-    );
     try {
-      const response = await api.post(`/justification/${id}/approve/`, { approved: false });
-      console.log("Resposta de rejeição:", response.data); // Depuração
+      setActionLoading(id);
+      console.log(`Tentando reprovar justificativa ${id}`);
+      
+      const response = await api.post(`/justification/${id}/approve/`, { 
+        approved: false,
+        approval: false
+      });
+      
+      console.log("Resposta de reprovação:", response.data);
+      
       if (response.status === 200) {
-        await fetchJustifications(); // Sincroniza com o servidor
-        setModalVisible(false);
-        Alert.alert("Sucesso", "Justificativa rejeitada com sucesso!");
+        // Atualizar estado local imediatamente para feedback visual
+        setJustifications((prev) =>
+          prev.map((j) => (j.id === id ? { ...j, status: "recusada" } : j))
+        );
+        
+        // Atualizar item selecionado se for o mesmo
+        if (selected && selected.id === id) {
+          setSelected({ ...selected, status: "recusada" });
+        }
+        
+        Alert.alert("Sucesso", "Justificativa reprovada com sucesso!");
+        
+        // Recarregar dados em background para sincronizar
+        setTimeout(fetchJustifications, 1000);
+        
+      } else {
+        throw new Error(`Status inesperado: ${response.status}`);
       }
     } catch (error) {
-      console.error("Erro ao rejeitar justificativa:", error);
-      // Reverte a mudança local se a API falhar
-      setJustifications((prev) =>
-        prev.map((j) => (j.id === id ? { ...j, status: "pendente" } : j))
-      );
-      Alert.alert("Erro", "Falha ao rejeitar a justificativa. Verifique suas permissões ou tente novamente.");
+      console.error("Erro ao reprovar justificativa:", error);
+      Alert.alert("Erro", "Falha ao reprovar a justificativa. Verifique suas permissões ou tente novamente.");
+    } finally {
+      setActionLoading(null);
     }
   };
 
-  const handleDelete = async (id: string) => {
-    try {
-      const response = await api.delete(`/justification/${id}/`);
-      if (response.status === 204) {
-        setJustifications((prev) => prev.filter((j) => j.id !== id));
-        setModalVisible(false);
-        Alert.alert("Sucesso", "Justificativa deletada com sucesso!");
-      }
-    } catch (error) {
-      console.error("Erro ao deletar justificativa:", error);
-      Alert.alert("Erro", "Falha ao deletar a justificativa. Verifique suas permissões ou tente novamente.");
-    }
-  };
+
 
   const openDetails = (item: Justification) => {
     setSelected(item);
@@ -145,9 +197,11 @@ export default function ManagerJustificationsScreen() {
     <TouchableOpacity style={styles.card} onPress={() => openDetails(item)}>
       <Text style={styles.employee}>{item.employee}</Text>
       <View style={styles.rowBetween}>
-        <Text style={styles.reason}>{item.reason}</Text>
+        <Text style={styles.reason} numberOfLines={2}>{item.reason}</Text>
         <View style={[styles.status, { backgroundColor: STATUS_COLORS[item.status] }]}>
-          <Text style={styles.statusText}>{item.status.charAt(0).toUpperCase() + item.status.slice(1)}</Text>
+          <Text style={styles.statusText}>
+            {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+          </Text>
         </View>
       </View>
       <Text style={styles.date}>{item.date}</Text>
@@ -165,7 +219,8 @@ export default function ManagerJustificationsScreen() {
           <View style={{ width: 32 }} />
         </View>
         <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-          <Text style={{ color: "#B0B3C7", fontSize: 16 }}>Carregando...</Text>
+          <ActivityIndicator size="large" color="#F4C542" />
+          <Text style={{ color: "#B0B3C7", fontSize: 16, marginTop: 12 }}>Carregando...</Text>
         </View>
       </SafeAreaView>
     );
@@ -180,17 +235,27 @@ export default function ManagerJustificationsScreen() {
         <Text style={styles.headerTitleYellow}>Justificativas Recebidas</Text>
         <View style={{ width: 32 }} />
       </View>
+
       <FlatList
         data={justifications}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         contentContainerStyle={{ padding: 16 }}
-        ListEmptyComponent={<Text style={styles.empty}>Nenhuma justificativa recebida.</Text>}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Ionicons name="document-text-outline" size={48} color="#B0B3C7" />
+            <Text style={styles.empty}>Nenhuma justificativa recebida.</Text>
+          </View>
+        }
+        refreshing={loading}
+        onRefresh={fetchJustifications}
       />
+
       <TouchableOpacity style={styles.actionButton} onPress={() => router.push("/help" as any)}>
         <Ionicons name="help-circle-outline" size={24} color="#F4C542" />
         <Text style={styles.actionButtonText}>Ajuda</Text>
       </TouchableOpacity>
+
       <Modal
         visible={modalVisible}
         animationType="slide"
@@ -213,25 +278,52 @@ export default function ManagerJustificationsScreen() {
                 <View style={styles.modalStatusRow}>
                   <Text style={styles.modalLabel}>Status:</Text>
                   <View style={[styles.statusModal, { backgroundColor: STATUS_COLORS[selected.status] }]}>
-                    <Text style={styles.statusTextModal}>{selected.status.charAt(0).toUpperCase() + selected.status.slice(1)}</Text>
+                    <Text style={styles.statusTextModal}>
+                      {selected.status.charAt(0).toUpperCase() + selected.status.slice(1)}
+                    </Text>
                   </View>
                 </View>
+
                 {selected.status === "pendente" && (
                   <View style={styles.modalActions}>
-                    <TouchableOpacity style={[styles.actionBtn, { backgroundColor: "#4BB543" }]} onPress={() => handleApprove(selected.id)}>
-                      <Ionicons name="checkmark-circle" size={20} color="#fff" style={{ marginRight: 6 }} />
+                    <TouchableOpacity 
+                      style={[styles.actionBtn, { backgroundColor: "#4BB543", opacity: actionLoading === selected.id ? 0.7 : 1 }]} 
+                      onPress={() => handleApprove(selected.id)}
+                      disabled={actionLoading === selected.id}
+                    >
+                      {actionLoading === selected.id ? (
+                        <ActivityIndicator size="small" color="#fff" style={{ marginRight: 6 }} />
+                      ) : (
+                        <Ionicons name="checkmark-circle" size={20} color="#fff" style={{ marginRight: 6 }} />
+                      )}
                       <Text style={styles.actionText}>Aprovar</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={[styles.actionBtn, { backgroundColor: "#FF6B6B" }]} onPress={() => handleReject(selected.id)}>
-                      <Ionicons name="close-circle" size={20} color="#fff" style={{ marginRight: 6 }} />
+                    <TouchableOpacity 
+                      style={[styles.actionBtn, { backgroundColor: "#FF6B6B", opacity: actionLoading === selected.id ? 0.7 : 1 }]} 
+                      onPress={() => handleReject(selected.id)}
+                      disabled={actionLoading === selected.id}
+                    >
+                      {actionLoading === selected.id ? (
+                        <ActivityIndicator size="small" color="#fff" style={{ marginRight: 6 }} />
+                      ) : (
+                        <Ionicons name="close-circle" size={20} color="#fff" style={{ marginRight: 6 }} />
+                      )}
                       <Text style={styles.actionText}>Reprovar</Text>
                     </TouchableOpacity>
                   </View>
                 )}
-                <TouchableOpacity style={[styles.actionBtn, { backgroundColor: "#FF6B6B", marginTop: 10 }]} onPress={() => handleDelete(selected.id)}>
-                  <Ionicons name="trash" size={20} color="#fff" style={{ marginRight: 6 }} />
-                  <Text style={styles.actionText}>Deletar</Text>
-                </TouchableOpacity>
+
+                {/* Mostrar informações adicionais para justificativas já processadas */}
+                {selected.status !== "pendente" && (
+                  <View style={styles.processedInfo}>
+                    <Text style={styles.processedInfoText}>
+                      Justificativa {selected.status === "aprovada" ? "aprovada" : "reprovada"}
+                    </Text>
+                  </View>
+                )}
+
+
+
                 <TouchableOpacity style={styles.closeBtn} onPress={closeModal}>
                   <Ionicons name="close" size={20} color="#B0B3C7" />
                   <Text style={styles.closeText}>Fechar</Text>
@@ -272,10 +364,6 @@ const styles = StyleSheet.create({
     textAlign: "center",
     flex: 1,
   },
-  helpButton: {
-    padding: 8,
-    marginLeft: 4,
-  },
   card: {
     backgroundColor: "#142850",
     borderRadius: 12,
@@ -284,27 +372,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#1A2A4F",
   },
-  cardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 8,
-  },
   employee: {
     fontSize: 16,
     fontWeight: "700",
     color: "#F4C542",
-    marginRight: 8,
+    marginBottom: 8,
   },
   status: {
     borderRadius: 8,
     paddingHorizontal: 10,
-    paddingVertical: 2,
+    paddingVertical: 4,
     alignItems: "center",
     justifyContent: "center",
     minWidth: 80,
     marginLeft: 8,
-    height: 24,
   },
   statusText: {
     color: "#333",
@@ -315,16 +396,24 @@ const styles = StyleSheet.create({
   reason: {
     fontSize: 15,
     color: "#FFFFFF",
-    marginBottom: 4,
+    flex: 1,
+    marginRight: 12,
   },
   date: {
     fontSize: 13,
     color: "#B0B3C7",
+    marginTop: 8,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 60,
   },
   empty: {
     color: "#B0B3C7",
     textAlign: "center",
-    marginTop: 40,
+    marginTop: 12,
     fontSize: 16,
   },
   modalOverlay: {
@@ -354,19 +443,22 @@ const styles = StyleSheet.create({
     marginTop: 6,
     fontWeight: "600",
     alignSelf: "flex-start",
+    width: "100%",
   },
   modalValue: {
     color: "#fff",
     fontSize: 15,
     fontWeight: "500",
-    marginBottom: 2,
+    marginBottom: 8,
     alignSelf: "flex-start",
+    width: "100%",
   },
   modalStatusRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 12,
-    marginBottom: 8,
+    marginTop: 8,
+    marginBottom: 16,
+    width: "100%",
   },
   modalActions: {
     flexDirection: "row",
@@ -378,11 +470,10 @@ const styles = StyleSheet.create({
   actionBtn: {
     flex: 1,
     borderRadius: 8,
-    paddingVertical: 10,
+    paddingVertical: 12,
     alignItems: "center",
     flexDirection: "row",
     justifyContent: "center",
-    marginRight: 0,
   },
   actionText: {
     color: "#fff",
@@ -406,53 +497,25 @@ const styles = StyleSheet.create({
     marginLeft: 6,
   },
   statusModal: {
-    borderRadius: 5,
+    borderRadius: 8,
     paddingHorizontal: 8,
-    paddingVertical: 0,
+    paddingVertical: 4,
     alignItems: "center",
     justifyContent: "center",
-    minWidth: 40,
+    minWidth: 80,
     marginLeft: 8,
-    height: 18,
-    marginTop: 4,
   },
   statusTextModal: {
     color: "#333",
     fontWeight: "700",
-    fontSize: 15,
+    fontSize: 13,
     textAlign: "center",
-    lineHeight: 18,
-    marginTop: 2,
-  },
-  statusRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    marginTop: 4,
-    marginBottom: 2,
-  },
-  statusAlign: {
-    marginTop: 18,
-  },
-  statusCenterRow: {
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    marginTop: 10,
-    marginBottom: 2,
-  },
-  statusRightRow: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    alignItems: "center",
-    marginTop: 8,
-    marginBottom: 2,
   },
   rowBetween: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     justifyContent: "space-between",
-    marginTop: 4,
-    marginBottom: 2,
+    marginBottom: 4,
   },
   actionButton: {
     flexDirection: "row",
@@ -468,10 +531,8 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
     alignSelf: "center",
-    marginTop: 32,
+    marginTop: 16,
     marginBottom: 24,
-    position: "relative",
-    left: 0,
   },
   actionButtonText: {
     color: "#F4C542",
@@ -479,11 +540,18 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginLeft: 10,
   },
-  statusModalWrapper: {
+  processedInfo: {
+    backgroundColor: "#1A2A4F",
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 10,
+    marginBottom: 10,
     width: "100%",
-    alignItems: "flex-start",
-    marginTop: 2,
-    marginBottom: 8,
-    paddingLeft: 0,
+    alignItems: "center",
+  },
+  processedInfoText: {
+    color: "#B0B3C7",
+    fontSize: 14,
+    fontWeight: "600",
   },
 });
