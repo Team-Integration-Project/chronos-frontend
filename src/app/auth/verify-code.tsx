@@ -2,15 +2,16 @@ import React, { useState } from "react";
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, Alert } from "react-native";
 import { ButtonLogin } from "../../components/ButtonLogin";
 import { router } from "expo-router";
-import api from "../../services/api"; 
+import api from "../../services/api";
 
-export default function ForgotPassword() {
+export default function VerifyResetCode() {
   const [isLoading, setIsLoading] = useState(false);
   const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
 
-  const handleResetPassword = async () => {
-    if (!email.trim()) {
-      Alert.alert("Erro", "Por favor, digite seu e-mail.");
+  const handleVerifyCode = async () => {
+    if (!email.trim() || !code.trim()) {
+      Alert.alert("Erro", "Por favor, preencha todos os campos.");
       return;
     }
 
@@ -20,35 +21,55 @@ export default function ForgotPassword() {
       return;
     }
 
-    setIsLoading(true);
+    if (code.length !== 6) {
+      Alert.alert("Erro", "O código deve ter exatamente 6 dígitos.");
+      return;
+    }
 
+    setIsLoading(true);
     try {
-      const response = await api.post("/forgot-password/", { email });
+      const response = await api.post("/verify-reset-code/", { 
+        email: email.trim(), 
+        code: code.trim() 
+      });
+
       setIsLoading(false);
       Alert.alert(
-        "E-mail enviado",
-        response.data.message || "Se o e-mail existir, um link de recuperação foi enviado para sua caixa de entrada.",
+        "Código válido",
+        "Agora você pode redefinir sua senha.",
         [
           {
             text: "OK",
-            onPress: () => router.push("/auth/verify-code"), 
+            onPress: () => router.push({ 
+              pathname: "/auth/reset-password", 
+              params: { email: email.trim(), code: code.trim() } 
+            })
           },
         ]
       );
     } catch (error: any) {
       setIsLoading(false);
-      const errorMessage =
-        error.response?.data?.error || "Erro ao enviar o e-mail de recuperação. Tente novamente.";
+      
+      let errorMessage = "Erro ao verificar o código. Tente novamente.";
+      
+      if (error.response?.data) {
+        errorMessage = error.response.data.error || 
+                     error.response.data.detail || 
+                     error.response.data.message || 
+                     errorMessage;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       Alert.alert("Erro", errorMessage);
     }
   };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Recuperar Senha</Text>
-      
+      <Text style={styles.title}>Verificar Código</Text>
       <Text style={styles.subtitle}>
-        Digite seu e-mail para receber um link de recuperação
+        Digite o e-mail e o código que você recebeu para continuar.
       </Text>
 
       <View style={styles.form}>
@@ -62,11 +83,21 @@ export default function ForgotPassword() {
           style={styles.input}
         />
 
+        <TextInput
+          placeholder="Código de 6 dígitos"
+          placeholderTextColor="#B0B3C7"
+          keyboardType="numeric"
+          maxLength={6}
+          value={code}
+          onChangeText={setCode}
+          style={styles.input}
+        />
+
         <View style={styles.buttonContainer}>
           <ButtonLogin
-            icon="mail-outline"
-            title="Enviar link de recuperação"
-            onPress={handleResetPassword}
+            icon="key-outline"
+            title="Verificar Código"
+            onPress={handleVerifyCode}
             isLoading={isLoading}
             backgroundColor="#F4C542"
             textColor="#333"

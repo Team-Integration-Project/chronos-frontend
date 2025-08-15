@@ -1,15 +1,19 @@
 import React, { useState } from "react";
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, Alert } from "react-native";
 import { ButtonLogin } from "../../components/ButtonLogin";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import api from "../../services/api";
 
 export default function ResetPassword() {
+  const { email = "", code = "" } = useLocalSearchParams<{ email?: string; code?: string }>();
   const [isLoading, setIsLoading] = useState(false);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const emailStr = Array.isArray(email) ? email[0] : email;
+  const codeStr = Array.isArray(code) ? code[0] : code;
 
   const validatePassword = (password: string) => {
     const minLength = 8;
@@ -19,26 +23,34 @@ export default function ResetPassword() {
     const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password);
 
     return {
-      isValid: password.length >= minLength && hasUpperCase && hasLowerCase && hasNumbers && hasSpecialChar,
+      isValid:
+        password.length >= minLength &&
+        hasUpperCase &&
+        hasLowerCase &&
+        hasNumbers &&
+        hasSpecialChar,
       errors: {
         length: password.length < minLength,
         upperCase: !hasUpperCase,
         lowerCase: !hasLowerCase,
         numbers: !hasNumbers,
         specialChar: !hasSpecialChar,
-      }
+      },
     };
   };
 
   const handleResetPassword = async () => {
-    if (!password.trim() || !confirmPassword.trim()) {
+    if (!emailStr.trim() || !codeStr.trim() || !password.trim() || !confirmPassword.trim()) {
       Alert.alert("Erro", "Por favor, preencha todos os campos.");
       return;
     }
 
     const passwordValidation = validatePassword(password);
     if (!passwordValidation.isValid) {
-      Alert.alert("Erro", "A senha deve ter pelo menos 8 caracteres, incluindo maiúsculas, minúsculas, números e caracteres especiais.");
+      Alert.alert(
+        "Erro",
+        "A senha deve ter pelo menos 8 caracteres, incluindo maiúsculas, minúsculas, números e caracteres especiais."
+      );
       return;
     }
 
@@ -47,32 +59,48 @@ export default function ResetPassword() {
       return;
     }
 
-    setIsLoading(true);
-    
-    // Simulação de chamada à API
-    setTimeout(() => {
+    try {
+      setIsLoading(true);
+
+      const response = await api.post("/reset-password/", {
+        email: emailStr.trim(),
+        code: codeStr.trim(),
+        new_password: password,
+      });
+
       setIsLoading(false);
+
       Alert.alert(
         "Senha redefinida",
         "Sua senha foi redefinida com sucesso!",
-        [
-          {
-            text: "OK",
-            onPress: () => router.replace("/")
-          }
-        ]
+        [{ text: "OK", onPress: () => router.replace("/") }]
       );
-    }, 2000);
+    } catch (error: any) {
+      setIsLoading(false);
+      
+      let errorMessage = "Não foi possível redefinir a senha.";
+      
+      if (error.response?.data) {
+        errorMessage = error.response.data.error || 
+                     error.response.data.detail || 
+                     error.response.data.message || 
+                     errorMessage;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      Alert.alert("Erro", errorMessage);
+    }
   };
 
   const renderPasswordRequirements = () => {
     const validation = validatePassword(password);
     const requirements = [
       { key: "length", text: "Mínimo 8 caracteres", met: !validation.errors.length },
-      { key: "upperCase", text: "Pelo menos uma maiúscula", met: !validation.errors.upperCase },
-      { key: "lowerCase", text: "Pelo menos uma minúscula", met: !validation.errors.lowerCase },
-      { key: "numbers", text: "Pelo menos um número", met: !validation.errors.numbers },
-      { key: "specialChar", text: "Pelo menos um caractere especial", met: !validation.errors.specialChar },
+      { key: "upperCase", text: "Letra maiúscula", met: !validation.errors.upperCase },
+      { key: "lowerCase", text: "Letra minúscula", met: !validation.errors.lowerCase },
+      { key: "numbers", text: "Número", met: !validation.errors.numbers },
+      { key: "specialChar", text: "Caractere especial", met: !validation.errors.specialChar },
     ];
 
     return (
@@ -97,12 +125,14 @@ export default function ResetPassword() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Redefinir Senha</Text>
-      
-      <Text style={styles.subtitle}>
-        Digite sua nova senha
-      </Text>
+      <Text style={styles.subtitle}>Digite sua nova senha</Text>
 
       <View style={styles.form}>
+        <View style={styles.infoContainer}>
+          <Text style={styles.infoText}>E-mail: {emailStr}</Text>
+          <Text style={styles.infoText}>Código: {codeStr}</Text>
+        </View>
+
         <View style={styles.inputContainer}>
           <TextInput
             placeholder="Nova senha"
@@ -171,85 +201,21 @@ export default function ResetPassword() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#0A1F44",
-    justifyContent: "center",
-    paddingHorizontal: 24,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: "700",
-    color: "#FFFFFF",
-    textAlign: "center",
-    marginBottom: 16,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: "#B0B3C7",
-    textAlign: "center",
-    marginBottom: 32,
-    lineHeight: 22,
-  },
-  form: {
-    gap: 16,
-  },
-  inputContainer: {
-    position: "relative",
-  },
-  input: {
-    backgroundColor: "#142850",
-    borderColor: "#1A2A4F",
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingRight: 50,
-    height: 56,
-    fontSize: 16,
-    color: "#FFFFFF",
-  },
-  eyeIcon: {
-    position: "absolute",
-    right: 16,
-    top: 18,
-  },
-  requirementsContainer: {
-    backgroundColor: "#142850",
-    borderRadius: 8,
-    padding: 16,
-    marginTop: 8,
-  },
-  requirementsTitle: {
-    color: "#FFFFFF",
-    fontSize: 14,
-    fontWeight: "600",
-    marginBottom: 8,
-  },
-  requirementItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 4,
-  },
-  requirementText: {
-    fontSize: 12,
-    marginLeft: 8,
-  },
-  buttonContainer: {
-    alignItems: "center",
-    marginTop: 8,
-  },
-  backToLoginContainer: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginTop: 16,
-  },
-  backToLoginText: {
-    color: "#FFFFFF",
-    fontSize: 14,
-  },
-  backToLoginLink: {
-    color: "#F4C542",
-    fontWeight: "700",
-    fontSize: 14,
-  },
-}); 
+  container: { flex: 1, backgroundColor: "#0A1F44", justifyContent: "center", paddingHorizontal: 24 },
+  title: { fontSize: 28, fontWeight: "700", color: "#FFFFFF", textAlign: "center", marginBottom: 16 },
+  subtitle: { fontSize: 16, color: "#B0B3C7", textAlign: "center", marginBottom: 32, lineHeight: 22 },
+  form: { gap: 16 },
+  infoContainer: { marginBottom: 12, alignItems: "center" },
+  infoText: { color: "#B0B3C7", fontSize: 14 },
+  inputContainer: { position: "relative" },
+  input: { backgroundColor: "#142850", borderColor: "#1A2A4F", borderWidth: 1, borderRadius: 8, paddingHorizontal: 16, paddingRight: 50, height: 56, fontSize: 16, color: "#FFFFFF" },
+  eyeIcon: { position: "absolute", right: 16, top: 18 },
+  requirementsContainer: { backgroundColor: "#142850", borderRadius: 8, padding: 16, marginTop: 8 },
+  requirementsTitle: { color: "#FFFFFF", fontSize: 14, fontWeight: "600", marginBottom: 8 },
+  requirementItem: { flexDirection: "row", alignItems: "center", marginBottom: 4 },
+  requirementText: { fontSize: 12, marginLeft: 8 },
+  buttonContainer: { alignItems: "center", marginTop: 8 },
+  backToLoginContainer: { flexDirection: "row", justifyContent: "center", marginTop: 16 },
+  backToLoginText: { color: "#FFFFFF", fontSize: 14 },
+  backToLoginLink: { color: "#F4C542", fontWeight: "700", fontSize: 14 },
+});
