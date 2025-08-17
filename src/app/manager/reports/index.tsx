@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, Dim
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import api from "@/services/api";
+import { isAxiosError } from "axios";
 
 const { width } = Dimensions.get("window");
 
@@ -19,9 +20,9 @@ export default function ReportsScreen() {
         setUsers(response.data);
       } catch (error) {
         console.error("Erro ao buscar usuários:", error);
-        if (error.response) {
-          console.error("Status:", error.response.status);
-          console.error("Data:", error.response.data);
+        if (isAxiosError(error)) {
+          console.error("Status:", error.response?.status);
+          console.error("Data:", error.response?.data);
         }
         setError("Falha ao carregar os usuários. Tente novamente.");
       } finally {

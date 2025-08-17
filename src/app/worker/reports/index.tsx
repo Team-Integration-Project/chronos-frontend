@@ -1,16 +1,41 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import api from "../../../services/api"; 
+import { ComponentProps } from "react";
+
+type IconName = ComponentProps<typeof Ionicons>["name"];
 
 export default function WorkerReportsScreen() {
   const [selectedPeriod, setSelectedPeriod] = useState("mes");
+  const [reportData, setReportData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const periods = [
-    { id: "dia", label: "Dia", icon: "calendar-outline" },
+  const periods: { id: string; label: string; icon: IconName }[] = [
+    { id: "hoje", label: "Dia", icon: "calendar-outline" },
     { id: "mes", label: "Mês", icon: "calendar" },
     { id: "ano", label: "Ano", icon: "calendar-clear-outline" },
   ];
+
+  const fetchReportData = async (period: string) => {
+      setLoading(true);
+      setError(null);
+      try {
+          const response = await api.get(`/attendance/me/?period=${period}`);
+          setReportData(response.data);
+      } catch (err: any) {
+          console.error("Erro ao buscar dados do relatório:", err.response?.data || err.message);
+          setError("Erro ao carregar dados do relatório.");
+      } finally {
+          setLoading(false);
+      }
+  };
+
+  useEffect(() => {
+      fetchReportData(selectedPeriod);
+  }, [selectedPeriod]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -52,66 +77,56 @@ export default function WorkerReportsScreen() {
           </View>
         </View>
 
-        <View style={styles.infoCard}>
-          <Text style={styles.infoTitle}>Informações do Funcionário</Text>
-          <Text style={styles.infoText}>Nome: João Silva</Text>
-          <Text style={styles.infoText}>CPF: 123.456.789-00</Text>
-          <Text style={styles.infoText}>Função: Terceirizado</Text>
-        </View>
+        {loading ? (
+          <Text style={styles.loadingText}>Carregando relatório...</Text>
+        ) : error ? (
+          <Text style={styles.errorText}>{error}</Text>
+        ) : reportData ? (
+          <>
+            <View style={styles.infoCard}>
+              <Text style={styles.infoTitle}>Informações do Funcionário</Text>
+              <Text style={styles.infoText}>Nome: {reportData.user || 'N/A'}</Text>
+              <Text style={styles.infoText}>CPF: {reportData.stats?.cpf || 'N/A'}</Text>
+              <Text style={styles.infoText}>Função: {reportData.stats?.role || 'N/A'}</Text>
+            </View>
 
-        <View style={styles.statsContainer}>
-          <Text style={styles.statsTitle}>Estatísticas do Mês</Text>
-          
-          <View style={styles.statsGrid}>
-            <View style={styles.statCard}>
-              <Ionicons name="time-outline" size={24} color="#F4C542" />
-              <Text style={styles.statNumber}>22</Text>
-              <Text style={styles.statLabel}>Dias Trabalhados</Text>
+            <View style={styles.statsContainer}>
+              <Text style={styles.statsTitle}>Estatísticas do {selectedPeriod === 'mes' ? 'Mês' : selectedPeriod === 'ano' ? 'Ano' : 'Dia'}</Text>
+              
+              <View style={styles.statsGrid}>
+                <View style={styles.statCard}>
+                  <Ionicons name="time-outline" size={24} color="#F4C542" />
+                  <Text style={styles.statNumber}>{reportData.stats?.dias_trabalhados || 0}</Text>
+                  <Text style={styles.statLabel}>Dias Trabalhados</Text>
+                </View>
+                
+                <View style={styles.statCard}>
+                  <Ionicons name="checkmark-circle-outline" size={24} color="#4CAF50" />
+                  <Text style={styles.statNumber}>{reportData.stats?.total_pontos_registrados || 0}</Text>
+                  <Text style={styles.statLabel}>Pontos Registrados</Text>
+                </View>
+                
+                <View style={styles.statCard}>
+                  <Ionicons name="alert-circle-outline" size={24} color="#FF9800" />
+                  <Text style={styles.statNumber}>{reportData.stats?.total_justificativas || 0}</Text>
+                  <Text style={styles.statLabel}>Justificativas</Text>
+                </View>
+                
+                <View style={styles.statCard}>
+                  <Ionicons name="calendar-outline" size={24} color="#2196F3" />
+                  <Text style={styles.statNumber}>{reportData.stats?.horas_trabalhadas_total || 0}</Text>
+                  <Text style={styles.statLabel}>Horas Trabalhadas</Text>
+                </View>
+              </View>
             </View>
-            
-            <View style={styles.statCard}>
-              <Ionicons name="checkmark-circle-outline" size={24} color="#4CAF50" />
-              <Text style={styles.statNumber}>20</Text>
-              <Text style={styles.statLabel}>Pontos Registrados</Text>
-            </View>
-            
-            <View style={styles.statCard}>
-              <Ionicons name="alert-circle-outline" size={24} color="#FF9800" />
-              <Text style={styles.statNumber}>2</Text>
-              <Text style={styles.statLabel}>Justificativas</Text>
-            </View>
-            
-            <View style={styles.statCard}>
-              <Ionicons name="calendar-outline" size={24} color="#2196F3" />
-              <Text style={styles.statNumber}>176</Text>
-              <Text style={styles.statLabel}>Horas Trabalhadas</Text>
-            </View>
-          </View>
-        </View>
 
-        <View style={styles.recentActivity}>
-          <Text style={styles.activityTitle}>Atividade Recente</Text>
-          
-          <View style={styles.activityItem}>
-            <Ionicons name="time" size={16} color="#F4C542" />
-            <Text style={styles.activityText}>Entrada: 08:00 - 15/12/2024</Text>
-          </View>
-          
-          <View style={styles.activityItem}>
-            <Ionicons name="time" size={16} color="#F4C542" />
-            <Text style={styles.activityText}>Saída: 17:00 - 15/12/2024</Text>
-          </View>
-          
-          <View style={styles.activityItem}>
-            <Ionicons name="document-text" size={16} color="#FF9800" />
-            <Text style={styles.activityText}>Justificativa enviada - 10/12/2024</Text>
-          </View>
-          
-          <View style={styles.activityItem}>
-            <Ionicons name="time" size={16} color="#F4C542" />
-            <Text style={styles.activityText}>Entrada: 08:15 - 14/12/2024</Text>
-          </View>
-        </View>
+            
+
+          </>
+        ) : (
+          <Text style={styles.noDataText}>Nenhum dado de relatório disponível.</Text>
+        )}
+
       </ScrollView>
 
       <View style={styles.bottomActions}>
@@ -247,29 +262,23 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: "center",
   },
-  recentActivity: {
-    marginBottom: 20,
-  },
-  activityTitle: {
-    color: "#F4C542",
-    fontWeight: "bold",
+  noDataText: {
+    color: "#B0B3C7",
     fontSize: 16,
-    marginBottom: 12,
+    textAlign: "center",
+    marginTop: 20,
   },
-  activityItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#142850",
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: "#1A2A4F",
-  },
-  activityText: {
+  loadingText: {
     color: "#FFFFFF",
-    fontSize: 14,
-    marginLeft: 12,
+    fontSize: 16,
+    textAlign: "center",
+    marginTop: 20,
+  },
+  errorText: {
+    color: "#FF6347",
+    fontSize: 16,
+    textAlign: "center",
+    marginTop: 20,
   },
   bottomActions: {
     paddingHorizontal: 16,

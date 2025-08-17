@@ -10,6 +10,8 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Href, router } from "expo-router";
+import api from "../../../services/api";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const { width } = Dimensions.get("window");
 
@@ -19,24 +21,27 @@ const ACTIONS = [
   { id: "3", title: "Perfil", icon: "person-circle-outline", route: "/worker/profile" },
 ];
 
-const userService = {
-  getCurrentUser: (): Promise<{ name: string }> =>
-    new Promise((resolve) => setTimeout(() => resolve({ name: "João" }), 800)),
-};
-const authService = {
-  logout: (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 400)),
-};
-
 export default function WorkerHomeScreen() {
-  const [user, setUser] = useState<{ name: string } | null>(null);
+  const [user, setUser] = useState<{ username: string } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    userService.getCurrentUser().then((u) => setUser(u)).finally(() => setIsLoading(false));
+    const fetchUserData = async () => {
+      try {
+        const response = await api.get('/profile/');
+        setUser(response.data);
+      } catch (error) {
+        console.error("Erro ao buscar dados do usuário:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchUserData();
   }, []);
 
   const handleLogout = async () => {
-    await authService.logout();
+    await AsyncStorage.removeItem('accessToken');
+    await AsyncStorage.removeItem('refreshToken');
     router.replace("/");
   };
 
@@ -67,7 +72,7 @@ export default function WorkerHomeScreen() {
 
       <View style={styles.greetingContainer}>
         <Text style={styles.greeting}>
-          Olá, <Text style={styles.greetingBold}>{user.name}</Text> 👋
+          Olá, <Text style={styles.greetingBold}>{user.username}</Text> 👋
         </Text>
         <Text style={styles.greetingSub}>Bem-vindo ao sistema de ponto digital</Text>
       </View>

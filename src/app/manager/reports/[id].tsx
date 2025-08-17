@@ -11,13 +11,15 @@ export default function ReportIndividualScreen() {
   const name = params.name || "Funcionário";
   const userId = params.id as string;
   const [period, setPeriod] = useState("mes");
+  const [startDate, setStartDate] = useState<string | null>(null);
+  const [endDate, setEndDate] = useState<string | null>(null);
   const [attendances, setAttendances] = useState<any[]>([]);
   const [totalAttendances, setTotalAttendances] = useState(0);
   const [stats, setStats] = useState({ 
-    totalHoras: 0, 
-    totalFaltas: 0, 
-    totalAtrasos: 0, 
-    totalJustificativas: 0 
+    horas_trabalhadas_total: 0, 
+    total_faltas: 0, 
+    total_atrasos: 0, 
+    total_justificativas: 0 
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -26,16 +28,29 @@ export default function ReportIndividualScreen() {
     const fetchUserAttendance = async () => {
       try {
         setLoading(true);
-        setError(null); // Limpar erro anterior
+        setError(null); 
         
         console.log(`Buscando dados para usuário ${userId} com período ${period}`);
         
-        const response = await api.get(`/attendance/${userId}/?period=${period}`);
+        let apiUrl = `/attendance/${userId}/`;
+        const queryParams = [];
+
+        if (startDate && endDate) {
+          queryParams.push(`start_date=${startDate}`);
+          queryParams.push(`end_date=${endDate}`);
+        } else {
+          queryParams.push(`period=${period}`);
+        }
+
+        if (queryParams.length > 0) {
+          apiUrl += `?${queryParams.join('&')}`;
+        }
+
+        const response = await api.get(apiUrl);
         console.log('Resposta da API:', response.data);
         
         const { attendances: data, total_attendances, stats: newStats } = response.data;
         
-        // Validar se os dados existem
         if (data) {
           setAttendances(data);
         } else {
@@ -49,36 +64,33 @@ export default function ReportIndividualScreen() {
           setTotalAttendances(0);
         }
         
-        // Validar e definir stats com valores padrão
         if (newStats && typeof newStats === 'object') {
           const updatedStats = {
-            totalHoras: newStats.totalHoras || 0,
-            totalFaltas: newStats.totalFaltas || 0,
-            totalAtrasos: newStats.totalAtrasos || 0,
-            totalJustificativas: newStats.totalJustificativas || 0
+            horas_trabalhadas_total: newStats.horas_trabalhadas_total || 0,
+            total_faltas: newStats.total_faltas || 0,
+            total_atrasos: newStats.total_atrasos || 0,
+            total_justificativas: newStats.total_justificativas || 0
           };
           setStats(updatedStats);
           console.log('Stats atualizadas:', updatedStats);
           
-          // Log adicional para debug das novas regras
           console.log(`📊 Estatísticas CUMULATIVAS (desde primeiro ponto):`);
-          console.log(`   ⏰ ${updatedStats.totalHoras}h trabalhadas no total`);
-          console.log(`   ❌ ${updatedStats.totalFaltas} faltas acumuladas`);
-          console.log(`   ⚠️ ${updatedStats.totalAtrasos} atrasos (após 07:00)`);
-          console.log(`   📄 ${updatedStats.totalJustificativas} justificativas`);
+          console.log(`   ⏰ ${updatedStats.horas_trabalhadas_total}h trabalhadas no total`);
+          console.log(`   ❌ ${updatedStats.total_faltas} faltas acumuladas`);
+          console.log(`   ⚠️ ${updatedStats.total_atrasos} atrasos (após 07:00)`);
+          console.log(`   📄 ${updatedStats.total_justificativas} justificativas`);
           
-          if (updatedStats.totalAtrasos > 0) {
-            console.log(`⚠️ ${updatedStats.totalAtrasos} atraso(s) detectado(s) (entrada após 07:00)`);
+          if (updatedStats.total_atrasos > 0) {
+            console.log(`⚠️ ${updatedStats.total_atrasos} atraso(s) detectado(s) (entrada após 07:00)`);
           }
         } else {
           console.warn('Stats não encontradas na resposta, usando valores padrão');
-          setStats({ totalHoras: 0, totalFaltas: 0, totalAtrasos: 0, totalJustificativas: 0 });
+          setStats({ horas_trabalhadas_total: 0, total_faltas: 0, total_atrasos: 0, total_justificativas: 0 });
         }
         
       } catch (error: any) {
         console.error("Erro ao buscar atendimentos:", error);
         
-        // Melhor tratamento de erros
         let errorMessage = "Falha ao carregar os atendimentos. Tente novamente.";
         if (error.response?.status === 404) {
           errorMessage = "Usuário não encontrado.";
@@ -101,7 +113,7 @@ export default function ReportIndividualScreen() {
       setError('ID do usuário não encontrado');
       setLoading(false);
     }
-  }, [userId, period]);
+  }, [userId, period, startDate, endDate]);
 
   if (loading) {
     return (
@@ -154,7 +166,7 @@ export default function ReportIndividualScreen() {
       <View style={styles.summaryRow}>
         <SummaryCard 
           label="Horas" 
-          value={stats.totalHoras || 0} 
+          value={stats.horas_trabalhadas_total || 0} 
           color="#4CAF50" 
           icon="time-outline" 
           suffix="h"
@@ -162,46 +174,38 @@ export default function ReportIndividualScreen() {
         />
         <SummaryCard 
           label="Faltas" 
-          value={stats.totalFaltas || 0} 
+          value={stats.total_faltas || 0} 
           color="#FF6B6B" 
           icon="close-circle-outline" 
           subtitle="total geral"
         />
         <SummaryCard 
           label="Atrasos" 
-          value={stats.totalAtrasos || 0} 
+          value={stats.total_atrasos || 0} 
           color="#FF9800" 
           icon="alert-circle-outline" 
           subtitle="após 07:00"
         />
         <SummaryCard 
           label="Justificativas" 
-          value={stats.totalJustificativas || 0} 
+          value={stats.total_justificativas || 0} 
           color="#2196F3" 
           icon="document-text-outline" 
           subtitle="total enviadas"
         />
       </View>
       
-      {/* Indicador que stats são cumulativas */}
-      <View style={styles.infoRow}>
-        <Ionicons name="information-circle-outline" size={16} color="#8A8FA3" />
-        <Text style={styles.infoText}>
-          Estatísticas mostram dados acumulados desde o primeiro ponto batido
-        </Text>
-      </View>
+
       
       <View style={styles.filtersSection}>
         <Text style={styles.filterLabel}>Filtrar visualização da tabela:</Text>
         <View style={styles.filterRow}>
-          <FilterBtn label="Hoje" active={period === "hoje"} onPress={() => setPeriod("hoje")} />
-          <FilterBtn label="Semana" active={period === "semana"} onPress={() => setPeriod("semana")} />
-          <FilterBtn label="Mês" active={period === "mes"} onPress={() => setPeriod("mes")} />
-          <FilterBtn label="Ano" active={period === "ano"} onPress={() => setPeriod("ano")} />
+          <FilterBtn label="Hoje" active={period === "hoje" && !startDate} onPress={() => { setPeriod("hoje"); setStartDate(null); setEndDate(null); }} />
+          <FilterBtn label="Semana" active={period === "semana" && !startDate} onPress={() => { setPeriod("semana"); setStartDate(null); setEndDate(null); }} />
+          <FilterBtn label="Mês" active={period === "mes" && !startDate} onPress={() => { setPeriod("mes"); setStartDate(null); setEndDate(null); }} />
+          <FilterBtn label="Ano" active={period === "ano" && !startDate} onPress={() => { setPeriod("ano"); setStartDate(null); setEndDate(null); }} />
+
         </View>
-        <Text style={styles.filterSubtext}>
-          * As estatísticas acima sempre mostram dados totais
-        </Text>
       </View>
       
       {attendances && attendances.length > 0 ? (
@@ -319,7 +323,7 @@ function StatusBadge({ status }: StatusBadgeProps) {
       break;
     case 'Atraso':
       color = '#fff';
-      bg = '#FF9800'; // Laranja mais forte para atrasos
+      bg = '#FF9800'; 
       break;
     case 'Falta':
       color = '#fff';

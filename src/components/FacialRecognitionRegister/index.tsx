@@ -4,7 +4,6 @@ import { CameraView, useCameraPermissions, CameraPictureOptions } from "expo-cam
 import { ButtonLogin } from "../ButtonLogin"; 
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { saveUserType } from "../../utils/userType";
 import api from "../../services/api";
 import { AxiosError } from "axios";
@@ -115,14 +114,6 @@ export default function FacialRecognitionRegister() {
         password: userData.password,
         confirm_password: userData.confirm_password,
         role: response.data.user.role,
-      });
-
-      await AsyncStorage.setItem("accessToken", response.data.access);
-      await AsyncStorage.setItem("refreshToken", response.data.refresh);
-
-      console.log("Tokens recebidos:", {
-        refresh: response.data.refresh,
-        access: response.data.access,
       });
 
       handleScanComplete();
