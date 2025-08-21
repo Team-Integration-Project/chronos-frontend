@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, Dimensions, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, Dimensions, ActivityIndicator, Alert, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, router } from "expo-router";
 import api from "@/services/api";
+import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system';
+import * as Print from 'expo-print';
 
 const { width } = Dimensions.get("window");
 
@@ -153,6 +156,157 @@ export default function ReportIndividualScreen() {
     );
   }
 
+  const generatePdf = async () => {
+    setLoading(true);
+    try {
+      const userName = Array.isArray(name) ? name[0] : name;
+      const htmlContent = `
+        <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 20px; }
+            h1 { color: #0A1F44; text-align: center; }
+            h2 { color: #333; margin-top: 20px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+            th { background-color: #f2f2f2; }
+            .summary-card {
+              display: inline-block;
+              width: 23%; /* Approx 4 cards per row */
+              margin-right: 2%;
+              border: 1px solid #ccc;
+              border-radius: 8px;
+              padding: 10px;
+              text-align: center;
+              box-sizing: border-box;
+            }
+            .summary-value { font-weight: bold; font-size: 1.2em; }
+            .summary-label { font-size: 0.9em; color: #555; }
+          </style>
+        </head>
+        <body>
+          <h1>Relatório de Atendimentos</h1>
+          <h2>Detalhes do Usuário: ${userName}</h2>
+
+          <h2>Estatísticas Gerais</h2>
+          <div style="display: flex; flex-wrap: wrap; justify-content: space-around;">
+            <div class="summary-card" style="border-color: #4CAF50;">
+              <p class="summary-value">${stats.horas_trabalhadas_total.toFixed(1)}h</p>
+              <p class="summary-label">Horas Trabalhadas</p>
+            </div>
+            <div class="summary-card" style="border-color: #FF6B6B;">
+              <p class="summary-value">${stats.total_faltas}</p>
+              <p class="summary-label">Faltas</p>
+            </div>
+            <div class="summary-card" style="border-color: #FF9800;">
+              <p class="summary-value">${stats.total_atrasos}</p>
+              <p class="summary-label">Atrasos</p>
+            </div>
+            <div class="summary-card" style="border-color: #2196F3;">
+              <p class="summary-value">${stats.total_justificativas}</p>
+              <p class="summary-label">Justificativas</p>
+            </div>
+          </div>
+
+          <h2>Registros de Ponto</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Entrada</th>
+                <th>Almoço</th>
+                <th>Saída</th>
+                <th>Status</th>
+                <th>Observação</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${attendances.map(r => `
+                <tr>
+                  <td>${r.date || '-'}</td>
+                  <td>${r.entrada || '-'}</td>
+                  <td>${r.entrada_almoco || '-'}</td>
+                  <td>${r.saida || '-'}</td>
+                  <td>${r.status || '-'}</td>
+                  <td>${r.observacao || '-'}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </body>
+        </html>
+      `;
+
+      const fileName = `Relatorio_Atendimentos_${userName.replace(/\s/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+
+      if (Platform.OS === 'android') {
+        const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
+        if (permissions.granted) {
+          const uri = await FileSystem.StorageAccessFramework.createFileAsync(
+            permissions.directoryUri,
+            fileName,
+            'application/pdf'
+          );
+          const { uri: tempUri } = await Print.printToFileAsync({ html: htmlContent });
+          const fileContent = await FileSystem.readAsStringAsync(tempUri, { encoding: FileSystem.EncodingType.Base64 });
+          await FileSystem.writeAsStringAsync(uri, fileContent, { encoding: FileSystem.EncodingType.Base64 });
+          Alert.alert("Sucesso", `PDF salvo. Você pode acessá-lo usando um gerenciador de arquivos.`);
+        } else {
+          Alert.alert("Erro", "Permissão negada para acessar o diretório.");
+        }
+      } else {
+        const { uri } = await Print.printToFileAsync({ html: htmlContent });
+        await Sharing.shareAsync(uri);
+        Alert.alert("Sucesso", "PDF gerado e pronto para salvar ou compartilhar.");
+      }
+
+    } catch (error) {
+      console.error('Erro ao gerar PDF:', error);
+      Alert.alert("Erro", "Não foi possível gerar o PDF. Tente novamente.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const generateCsv = async () => {
+    setLoading(true);
+    try {
+      const userName = Array.isArray(name) ? name[0] : name;
+      let csvContent = "Data,Entrada,Almoco,Saida,Status,Observacao\n";
+      attendances.forEach(r => {
+        csvContent += `${r.date || ''},${r.entrada || ''},${r.entrada_almoco || ''},${r.saida || ''},${r.status || ''},"${r.observacao ? r.observacao.replace(/"/g, '""') : ''}"\n`;
+      });
+
+      const fileName = `Relatorio_Atendimentos_${userName.replace(/\s/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`;
+
+      if (Platform.OS === 'android') {
+        const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
+        if (permissions.granted) {
+          const uri = await FileSystem.StorageAccessFramework.createFileAsync(
+            permissions.directoryUri,
+            fileName,
+            'text/csv'
+          );
+          await FileSystem.writeAsStringAsync(uri, csvContent);
+          Alert.alert("Sucesso", `CSV salvo. Você pode acessá-lo usando um gerenciador de arquivos.`);
+        } else {
+          Alert.alert("Erro", "Permissão negada para acessar o diretório.");
+        }
+      } else {
+        const tempPath = `${FileSystem.cacheDirectory}${fileName}`;
+        await FileSystem.writeAsStringAsync(tempPath, csvContent);
+        await Sharing.shareAsync(tempPath);
+        Alert.alert("Sucesso", "CSV gerado e pronto para salvar ou compartilhar.");
+      }
+
+    } catch (error) {
+      console.error('Erro ao gerar CSV:', error);
+      Alert.alert("Erro", "Não foi possível gerar o CSV. Tente novamente.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.headerRow}>
@@ -254,8 +408,8 @@ export default function ReportIndividualScreen() {
       )}
       
       <View style={styles.downloadSection}>
-        <DownloadBtn label="PDF" icon="document-outline" color="#F4C542" onPress={() => {}} />
-        <DownloadBtn label="Excel" icon="logo-microsoft" color="#4CAF50" onPress={() => {}} />
+        <DownloadBtn label="PDF" icon="document-outline" color="#F4C542" onPress={generatePdf} />
+        <DownloadBtn label="Excel" icon="logo-microsoft" color="#4CAF50" onPress={generateCsv} />
       </View>
     </SafeAreaView>
   );

@@ -1,15 +1,19 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, Alert, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import api from "../../../services/api"; 
 import { ComponentProps } from "react";
+import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system';
+import * as Print from 'expo-print';
 
 type IconName = ComponentProps<typeof Ionicons>["name"];
 
 export default function WorkerReportsScreen() {
   const [selectedPeriod, setSelectedPeriod] = useState("mes");
   const [reportData, setReportData] = useState<any>(null);
+  const [attendances, setAttendances] = useState<any[]>([]); 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -25,6 +29,7 @@ export default function WorkerReportsScreen() {
       try {
           const response = await api.get(`/attendance/me/?period=${period}`);
           setReportData(response.data);
+          setAttendances(response.data.attendances || []); 
       } catch (err: any) {
           console.error("Erro ao buscar dados do relatório:", err.response?.data || err.message);
           setError("Erro ao carregar dados do relatório.");
@@ -37,6 +42,172 @@ export default function WorkerReportsScreen() {
       fetchReportData(selectedPeriod);
   }, [selectedPeriod]);
 
+  const generatePdf = async () => {
+    setLoading(true);
+    try {
+      const userName = reportData?.user || 'N/A';
+      const userCpf = reportData?.stats?.cpf || 'N/A';
+      const userRole = reportData?.stats?.role || 'N/A';
+
+      const htmlContent = `
+        <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 20px; }
+            h1 { color: #0A1F44; text-align: center; }
+            h2 { color: #333; margin-top: 20px; }
+            p { margin-bottom: 5px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+            th { background-color: #f2f2f2; }
+            .summary-card {
+              display: inline-block;
+              width: 23%; /* Approx 4 cards per row */
+              margin-right: 2%;
+              border: 1px solid #ccc;
+              border-radius: 8px;
+              padding: 10px;
+              text-align: center;
+              box-sizing: border-box;
+            }
+            .summary-value { font-weight: bold; font-size: 1.2em; }
+            .summary-label { font-size: 0.9em; color: #555; }
+          </style>
+        </head>
+        <body>
+          <h1>Meu Relatório de Atendimentos</h1>
+          <h2>Informações do Funcionário</h2>
+          <p><strong>Nome:</strong> ${userName}</p>
+          <p><strong>CPF:</strong> ${userCpf}</p>
+          <p><strong>Função:</strong> ${userRole}</p>
+
+          <h2>Estatísticas do Período (${selectedPeriod === 'mes' ? 'Mês' : selectedPeriod === 'ano' ? 'Ano' : 'Dia'})</h2>
+          <div style="display: flex; flex-wrap: wrap; justify-content: space-around;">
+            <div class="summary-card" style="border-color: #F4C542;">
+              <p class="summary-value">${reportData.stats?.dias_trabalhados || 0}</p>
+              <p class="summary-label">Dias Trabalhados</p>
+            </div>
+            <div class="summary-card" style="border-color: #4CAF50;">
+              <p class="summary-value">${reportData.stats?.total_pontos_registrados || 0}</p>
+              <p class="summary-label">Pontos Registrados</p>
+            </div>
+            <div class="summary-card" style="border-color: #2196F3;">
+              <p class="summary-value">${reportData.stats?.total_justificativas || 0}</p>
+              <p class="summary-label">Justificativas</p>
+            </div>
+            <div class="summary-card" style="border-color: #F4C542;">
+              <p class="summary-value">${reportData.stats?.horas_trabalhadas_total || 0}</p>
+              <p class="summary-label">Horas Trabalhadas</p>
+            </div>
+          </div>
+
+          ${attendances.length > 0 ? `
+            <h2>Registros de Ponto Detalhados</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>Data</th>
+                  <th>Entrada</th>
+                  <th>Almoço</th>
+                  <th>Saída</th>
+                  <th>Status</th>
+                  <th>Observação</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${attendances.map(r => `
+                  <tr>
+                    <td>${r.date || '-'}</td>
+                    <td>${r.entrada || '-'}</td>
+                    <td>${r.entrada_almoco || '-'}</td>
+                    <td>${r.saida || '-'}</td>
+                    <td>${r.status || '-'}</td>
+                    <td>${r.observacao || '-'}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          ` : '<p>Nenhum registro de ponto detalhado encontrado para este período.</p>'}
+        </body>
+        </html>
+      `;
+
+      const fileName = `Meu_Relatorio_Atendimentos_${(reportData?.user || 'User').replace(/\s/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+
+      if (Platform.OS === 'android') {
+        const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
+        if (permissions.granted) {
+          const uri = await FileSystem.StorageAccessFramework.createFileAsync(
+            permissions.directoryUri,
+            fileName,
+            'application/pdf'
+          );
+          const { uri: tempUri } = await Print.printToFileAsync({ html: htmlContent });
+          const fileContent = await FileSystem.readAsStringAsync(tempUri, { encoding: FileSystem.EncodingType.Base64 });
+          await FileSystem.writeAsStringAsync(uri, fileContent, { encoding: FileSystem.EncodingType.Base64 });
+          Alert.alert("Sucesso", `PDF salvo. Você pode acessá-lo usando um gerenciador de arquivos.`);
+        } else {
+          Alert.alert("Erro", "Permissão negada para acessar o diretório.");
+        }
+      } else {
+        const { uri } = await Print.printToFileAsync({ html: htmlContent });
+        await Sharing.shareAsync(uri);
+        Alert.alert("Sucesso", "PDF gerado e pronto para salvar ou compartilhar.");
+      }
+    } catch (error) {
+      console.error('Erro ao gerar PDF:', error);
+      Alert.alert("Erro", "Não foi possível gerar o PDF. Tente novamente.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const generateCsv = async () => {
+    setLoading(true);
+    try {
+      let csvContent = `Informações do Funcionário\nNome:,${reportData?.user || 'N/A'}\nCPF:,${reportData?.stats?.cpf || 'N/A'}\nFunção:,${reportData?.stats?.role || 'N/A'}\n\nEstatísticas do Período (${selectedPeriod === 'mes' ? 'Mês' : selectedPeriod === 'ano' ? 'Ano' : 'Dia'})\n`;
+      csvContent += `Dias Trabalhados:,${reportData.stats?.dias_trabalhados || 0}\n`;
+      csvContent += `Pontos Registrados:,${reportData.stats?.total_pontos_registrados || 0}\n`;
+      csvContent += `Justificativas:,${reportData.stats?.total_justificativas || 0}\n`;
+      csvContent += `Horas Trabalhadas:,${reportData.stats?.horas_trabalhadas_total || 0}\n\n`;
+
+      if (attendances.length > 0) {
+        csvContent += "Registros de Ponto Detalhados\n";
+        csvContent += "Data,Entrada,Almoco,Saida,Status,Observacao\n";
+        attendances.forEach(r => {
+          csvContent += `${r.date || ''},${r.entrada || ''},${r.entrada_almoco || ''},${r.saida || ''},${r.status || ''},"${r.observacao ? r.observacao.replace(/"/g, '""') : ''}"\n`;
+        });
+      }
+
+      const fileName = `Meu_Relatorio_Atendimentos_${(reportData?.user || 'User').replace(/\s/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`;
+
+      if (Platform.OS === 'android') {
+        const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
+        if (permissions.granted) {
+          const uri = await FileSystem.StorageAccessFramework.createFileAsync(
+            permissions.directoryUri,
+            fileName,
+            'text/csv'
+          );
+          await FileSystem.writeAsStringAsync(uri, csvContent);
+          Alert.alert("Sucesso", `CSV salvo. Você pode acessá-lo usando um gerenciador de arquivos.`);
+        } else {
+          Alert.alert("Erro", "Permissão negada para acessar o diretório.");
+        }
+      } else {
+        const tempPath = `${FileSystem.cacheDirectory}${fileName}`;
+        await FileSystem.writeAsStringAsync(tempPath, csvContent);
+        await Sharing.shareAsync(tempPath);
+        Alert.alert("Sucesso", "CSV gerado e pronto para salvar ou compartilhar.");
+      }
+    } catch (error) {
+      console.error('Erro ao gerar CSV:', error);
+      Alert.alert("Erro", "Não foi possível gerar o CSV. Tente novamente.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.headerRow}>
@@ -48,7 +219,6 @@ export default function WorkerReportsScreen() {
       </View>
       
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-        {/* Filtros de período */}
         <View style={styles.periodFilter}>
           <Text style={styles.filterTitle}>Período:</Text>
           <View style={styles.periodButtons}>
@@ -119,14 +289,10 @@ export default function WorkerReportsScreen() {
                 </View>
               </View>
             </View>
-
-            
-
           </>
         ) : (
           <Text style={styles.noDataText}>Nenhum dado de relatório disponível.</Text>
         )}
-
       </ScrollView>
 
       <View style={styles.bottomActions}>
@@ -135,7 +301,15 @@ export default function WorkerReportsScreen() {
           <Text style={styles.actionButtonText}>Ajuda</Text>
         </TouchableOpacity>
         
-        <TouchableOpacity style={styles.exportBtn} onPress={() => {}} activeOpacity={0.85}>
+        <TouchableOpacity style={styles.exportBtn} onPress={() => Alert.alert(
+          "Exportar Relatório",
+          "Selecione o formato de exportação",
+          [
+            { text: "Cancelar", style: "cancel" },
+            { text: "PDF", onPress: generatePdf },
+            { text: "CSV", onPress: generateCsv },
+          ]
+        )} activeOpacity={0.85}>
           <Ionicons name="download-outline" size={22} color="#0A1F44" style={{ marginRight: 8 }} />
           <Text style={styles.exportBtnText}>Exportar Relatório</Text>
         </TouchableOpacity>
@@ -324,4 +498,4 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     fontSize: 16,
   },
-}); 
+});
