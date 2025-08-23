@@ -160,84 +160,272 @@ export default function ReportIndividualScreen() {
     setLoading(true);
     try {
       const userName = Array.isArray(name) ? name[0] : name;
+      const currentDate = new Date().toLocaleDateString('pt-BR');
+      const currentTime = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      
       const htmlContent = `
+        <!DOCTYPE html>
         <html>
         <head>
+          <meta charset="UTF-8">
           <style>
-            body { font-family: Arial, sans-serif; margin: 20px; }
-            h1 { color: #0A1F44; text-align: center; }
-            h2 { color: #333; margin-top: 20px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-            th { background-color: #f2f2f2; }
-            .summary-card {
-              display: inline-block;
-              width: 23%; /* Approx 4 cards per row */
-              margin-right: 2%;
-              border: 1px solid #ccc;
-              border-radius: 8px;
-              padding: 10px;
-              text-align: center;
+            * {
+              margin: 0;
+              padding: 0;
               box-sizing: border-box;
             }
-            .summary-value { font-weight: bold; font-size: 1.2em; }
-            .summary-label { font-size: 0.9em; color: #555; }
+            
+            body { 
+              font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+              line-height: 1.6;
+              color: #333;
+              background: #f8f9fa;
+            }
+            
+            .container {
+              max-width: 800px;
+              margin: 0 auto;
+              padding: 40px;
+              background: white;
+              box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            }
+            
+            .header {
+              text-align: center;
+              margin-bottom: 40px;
+              padding-bottom: 20px;
+              border-bottom: 3px solid #0A1F44;
+            }
+            
+            .header h1 {
+              color: #0A1F44;
+              font-size: 28px;
+              font-weight: 700;
+              margin-bottom: 10px;
+            }
+            
+            .header .subtitle {
+              color: #666;
+              font-size: 16px;
+              font-weight: 400;
+            }
+            
+            .employee-info {
+              background: linear-gradient(135deg, #0A1F44 0%, #142850 100%);
+              color: white;
+              padding: 25px;
+              border-radius: 12px;
+              margin-bottom: 30px;
+              text-align: center;
+            }
+            
+            .employee-info h2 {
+              font-size: 24px;
+              margin-bottom: 8px;
+              color: #F4C542;
+            }
+            
+            .employee-info .meta {
+              font-size: 14px;
+              opacity: 0.9;
+            }
+            
+            .stats-grid {
+              display: grid;
+              grid-template-columns: repeat(2, 1fr);
+              gap: 20px;
+              margin-bottom: 40px;
+            }
+            
+            .stat-card {
+              background: white;
+              border: 2px solid;
+              border-radius: 12px;
+              padding: 20px;
+              text-align: center;
+              box-shadow: 0 4px 6px rgba(0,0,0,0.07);
+              transition: transform 0.2s;
+            }
+            
+            .stat-card.hours { border-color: #4CAF50; }
+            .stat-card.absences { border-color: #FF6B6B; }
+            .stat-card.delays { border-color: #FF9800; }
+            .stat-card.justifications { border-color: #2196F3; }
+            
+            .stat-value {
+              font-size: 32px;
+              font-weight: 700;
+              margin-bottom: 5px;
+              color: #0A1F44;
+            }
+            
+            .stat-card.hours .stat-value { color: #4CAF50; }
+            .stat-card.absences .stat-value { color: #FF6B6B; }
+            .stat-card.delays .stat-value { color: #FF9800; }
+            .stat-card.justifications .stat-value { color: #2196F3; }
+            
+            .stat-label {
+              font-size: 14px;
+              color: #666;
+              text-transform: uppercase;
+              letter-spacing: 1px;
+              font-weight: 600;
+            }
+            
+            .table-section {
+              margin-top: 30px;
+            }
+            
+            .table-title {
+              color: #0A1F44;
+              font-size: 20px;
+              font-weight: 700;
+              margin-bottom: 20px;
+              display: flex;
+              align-items: center;
+            }
+            
+            .table-title::before {
+              content: "📋";
+              margin-right: 10px;
+              font-size: 22px;
+            }
+            
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              background: white;
+              border-radius: 8px;
+              overflow: hidden;
+              box-shadow: 0 4px 6px rgba(0,0,0,0.07);
+            }
+            
+            th {
+              background: linear-gradient(135deg, #0A1F44 0%, #142850 100%);
+              color: #F4C542;
+              padding: 16px 12px;
+              text-align: center;
+              font-weight: 600;
+              font-size: 14px;
+              text-transform: uppercase;
+              letter-spacing: 0.5px;
+            }
+            
+            td {
+              padding: 14px 12px;
+              text-align: center;
+              border-bottom: 1px solid #e9ecef;
+              font-size: 14px;
+            }
+            
+            tbody tr:nth-child(even) {
+              background-color: #f8f9fa;
+            }
+            
+            tbody tr:hover {
+              background-color: #e3f2fd;
+            }
+            
+            .no-data {
+              text-align: center;
+              padding: 40px;
+              color: #666;
+              font-style: italic;
+            }
+            
+            .footer {
+              margin-top: 50px;
+              padding-top: 20px;
+              border-top: 2px solid #e9ecef;
+              text-align: center;
+              color: #666;
+              font-size: 12px;
+            }
+            
+            .footer .generated-info {
+              margin-bottom: 10px;
+              font-weight: 500;
+            }
+            
+            @media print {
+              body { background: white; }
+              .container { box-shadow: none; }
+            }
           </style>
         </head>
         <body>
-          <h1>Relatório de Atendimentos</h1>
-          <h2>Detalhes do Usuário: ${userName}</h2>
+          <div class="container">
+            <div class="header">
+              <h1>Relatório de Ponto Eletrônico</h1>
+              <div class="subtitle">Sistema de Controle de Frequência</div>
+            </div>
 
-          <h2>Estatísticas Gerais</h2>
-          <div style="display: flex; flex-wrap: wrap; justify-content: space-around;">
-            <div class="summary-card" style="border-color: #4CAF50;">
-              <p class="summary-value">${stats.horas_trabalhadas_total.toFixed(1)}h</p>
-              <p class="summary-label">Horas Trabalhadas</p>
+            <div class="employee-info">
+              <h2>${userName}</h2>
+              <div class="meta">Relatório gerado em ${currentDate} às ${currentTime}</div>
             </div>
-            <div class="summary-card" style="border-color: #FF6B6B;">
-              <p class="summary-value">${stats.total_faltas}</p>
-              <p class="summary-label">Faltas</p>
+
+            <div class="stats-grid">
+              <div class="stat-card hours">
+                <div class="stat-value">${stats.horas_trabalhadas_total.toFixed(1)}h</div>
+                <div class="stat-label">Horas Trabalhadas</div>
+              </div>
+              <div class="stat-card absences">
+                <div class="stat-value">${stats.total_faltas}</div>
+                <div class="stat-label">Faltas Registradas</div>
+              </div>
+              <div class="stat-card delays">
+                <div class="stat-value">${stats.total_atrasos}</div>
+                <div class="stat-label">Atrasos (Após 07:00)</div>
+              </div>
+              <div class="stat-card justifications">
+                <div class="stat-value">${stats.total_justificativas}</div>
+                <div class="stat-label">Justificativas</div>
+              </div>
             </div>
-            <div class="summary-card" style="border-color: #FF9800;">
-              <p class="summary-value">${stats.total_atrasos}</p>
-              <p class="summary-label">Atrasos</p>
+
+            <div class="table-section">
+              <h2 class="table-title">Registros de Ponto</h2>
+              ${attendances.length > 0 ? `
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Data</th>
+                      <th>Entrada</th>
+                      <th>Almoço</th>
+                      <th>Saída</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${attendances.map(r => `
+                      <tr>
+                        <td><strong>${r.date || '—'}</strong></td>
+                        <td>${r.entrada || '—'}</td>
+                        <td>${r.entrada_almoco || '—'}</td>
+                        <td>${r.saida || '—'}</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              ` : `
+                <div class="no-data">
+                  📅 Nenhum registro de ponto encontrado para o período selecionado
+                </div>
+              `}
             </div>
-            <div class="summary-card" style="border-color: #2196F3;">
-              <p class="summary-value">${stats.total_justificativas}</p>
-              <p class="summary-label">Justificativas</p>
+
+            <div class="footer">
+              <div class="generated-info">
+                Relatório gerado automaticamente pelo Sistema de Ponto Eletrônico
+              </div>
+              <div>Data de geração: ${currentDate} • Horário: ${currentTime}</div>
             </div>
           </div>
-
-          <h2>Registros de Ponto</h2>
-          <table>
-            <thead>
-              <tr>
-                <th>Data</th>
-                <th>Entrada</th>
-                <th>Almoço</th>
-                <th>Saída</th>
-                <th>Status</th>
-                <th>Observação</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${attendances.map(r => `
-                <tr>
-                  <td>${r.date || '-'}</td>
-                  <td>${r.entrada || '-'}</td>
-                  <td>${r.entrada_almoco || '-'}</td>
-                  <td>${r.saida || '-'}</td>
-                  <td>${r.status || '-'}</td>
-                  <td>${r.observacao || '-'}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
         </body>
         </html>
       `;
 
-      const fileName = `Relatorio_Atendimentos_${userName.replace(/\s/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+      const fileName = `Relatorio_Ponto_${userName.replace(/\s/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
 
       if (Platform.OS === 'android') {
         const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
@@ -247,17 +435,23 @@ export default function ReportIndividualScreen() {
             fileName,
             'application/pdf'
           );
-          const { uri: tempUri } = await Print.printToFileAsync({ html: htmlContent });
+          const { uri: tempUri } = await Print.printToFileAsync({ 
+            html: htmlContent,
+            base64: false
+          });
           const fileContent = await FileSystem.readAsStringAsync(tempUri, { encoding: FileSystem.EncodingType.Base64 });
           await FileSystem.writeAsStringAsync(uri, fileContent, { encoding: FileSystem.EncodingType.Base64 });
-          Alert.alert("Sucesso", `PDF salvo. Você pode acessá-lo usando um gerenciador de arquivos.`);
+          Alert.alert("Sucesso", `PDF salvo com sucesso! Você pode acessá-lo usando um gerenciador de arquivos.`);
         } else {
           Alert.alert("Erro", "Permissão negada para acessar o diretório.");
         }
       } else {
-        const { uri } = await Print.printToFileAsync({ html: htmlContent });
+        const { uri } = await Print.printToFileAsync({ 
+          html: htmlContent,
+          base64: false
+        });
         await Sharing.shareAsync(uri);
-        Alert.alert("Sucesso", "PDF gerado e pronto para salvar ou compartilhar.");
+        Alert.alert("Sucesso", "PDF gerado com sucesso e pronto para salvar ou compartilhar!");
       }
 
     } catch (error) {
@@ -272,12 +466,12 @@ export default function ReportIndividualScreen() {
     setLoading(true);
     try {
       const userName = Array.isArray(name) ? name[0] : name;
-      let csvContent = "Data,Entrada,Almoco,Saida,Status,Observacao\n";
+      let csvContent = "Data,Entrada,Saida_Almoco,Entrada_Almoco,Saida\n";
       attendances.forEach(r => {
-        csvContent += `${r.date || ''},${r.entrada || ''},${r.entrada_almoco || ''},${r.saida || ''},${r.status || ''},"${r.observacao ? r.observacao.replace(/"/g, '""') : ''}"\n`;
+        csvContent += `${r.date || ''},${r.entrada || ''},${r.saida_almoco || ''},${r.entrada_almoco || ''},${r.saida || ''}\n`;
       });
 
-      const fileName = `Relatorio_Atendimentos_${userName.replace(/\s/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`;
+      const fileName = `Relatorio_Ponto_${userName.replace(/\s/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`;
 
       if (Platform.OS === 'android') {
         const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
@@ -288,7 +482,7 @@ export default function ReportIndividualScreen() {
             'text/csv'
           );
           await FileSystem.writeAsStringAsync(uri, csvContent);
-          Alert.alert("Sucesso", `CSV salvo. Você pode acessá-lo usando um gerenciador de arquivos.`);
+          Alert.alert("Sucesso", `CSV salvo com sucesso! Você pode acessá-lo usando um gerenciador de arquivos.`);
         } else {
           Alert.alert("Erro", "Permissão negada para acessar o diretório.");
         }
@@ -296,7 +490,7 @@ export default function ReportIndividualScreen() {
         const tempPath = `${FileSystem.cacheDirectory}${fileName}`;
         await FileSystem.writeAsStringAsync(tempPath, csvContent);
         await Sharing.shareAsync(tempPath);
-        Alert.alert("Sucesso", "CSV gerado e pronto para salvar ou compartilhar.");
+        Alert.alert("Sucesso", "CSV gerado com sucesso e pronto para salvar ou compartilhar!");
       }
 
     } catch (error) {
@@ -349,8 +543,6 @@ export default function ReportIndividualScreen() {
         />
       </View>
       
-
-      
       <View style={styles.filtersSection}>
         <Text style={styles.filterLabel}>Filtrar visualização da tabela:</Text>
         <View style={styles.filterRow}>
@@ -358,7 +550,6 @@ export default function ReportIndividualScreen() {
           <FilterBtn label="Semana" active={period === "semana" && !startDate} onPress={() => { setPeriod("semana"); setStartDate(null); setEndDate(null); }} />
           <FilterBtn label="Mês" active={period === "mes" && !startDate} onPress={() => { setPeriod("mes"); setStartDate(null); setEndDate(null); }} />
           <FilterBtn label="Ano" active={period === "ano" && !startDate} onPress={() => { setPeriod("ano"); setStartDate(null); setEndDate(null); }} />
-
         </View>
       </View>
       
@@ -367,33 +558,21 @@ export default function ReportIndividualScreen() {
           horizontal 
           showsHorizontalScrollIndicator={true} 
           style={{ marginHorizontal: 12, marginTop: 10 }} 
-          contentContainerStyle={{ minWidth: 900, paddingBottom: 32 }}
+          contentContainerStyle={{ minWidth: 500, paddingBottom: 32 }}
         >
           <View style={styles.tableSection}>
             <View style={styles.tableHeader}>
               <Text style={[styles.tableCell, { minWidth: 100 }]}>Data</Text>
               <Text style={[styles.tableCell, { minWidth: 90 }]}>Entrada</Text>
               <Text style={[styles.tableCell, { minWidth: 110 }]}>Almoço</Text>
-              <Text style={[styles.tableCell, { minWidth: 110 }]}>Saída</Text>
-              <Text style={[styles.tableCell, { minWidth: 110 }]}>Status</Text>
-              <Text style={[styles.tableCell, { minWidth: 180 }]}>Observação</Text>
+              <Text style={[styles.tableCell, { minWidth: 90 }]}>Saída</Text>
             </View>
             {attendances.map((r, idx) => (
               <View key={r.id || idx} style={[styles.tableRow, idx % 2 === 0 && styles.tableRowAlt]}>
-                <Text style={[styles.tableCell, { minWidth: 100 }]}>{r.date || '-'}</Text>
-                <Text style={[styles.tableCell, { minWidth: 90 }]}>{r.entrada || '-'}</Text>
-                <Text style={[styles.tableCell, { minWidth: 110 }]}>{r.entrada_almoco || '-'}</Text>
-                <Text style={[styles.tableCell, { minWidth: 110 }]}>{r.saida || '-'}</Text>
-                <Text style={[styles.tableCell, { minWidth: 110 }]}>
-                  <StatusBadge status={r.status || 'Pendente'} />
-                </Text>
-                <Text 
-                  style={[styles.tableCell, { minWidth: 180 }]} 
-                  numberOfLines={1} 
-                  ellipsizeMode="tail"
-                >
-                  {r.observacao || '-'}
-                </Text>
+                <Text style={[styles.tableCell, { minWidth: 100 }]}>{r.date || '—'}</Text>
+                <Text style={[styles.tableCell, { minWidth: 90 }]}>{r.entrada || '—'}</Text>
+                <Text style={[styles.tableCell, { minWidth: 110 }]}>{r.entrada_almoco || '—'}</Text>
+                <Text style={[styles.tableCell, { minWidth: 90 }]}>{r.saida || '—'}</Text>
               </View>
             ))}
           </View>
@@ -408,8 +587,8 @@ export default function ReportIndividualScreen() {
       )}
       
       <View style={styles.downloadSection}>
-        <DownloadBtn label="PDF" icon="document-outline" color="#F4C542" onPress={generatePdf} />
-        <DownloadBtn label="Excel" icon="logo-microsoft" color="#4CAF50" onPress={generateCsv} />
+        <DownloadBtn label="Gerar PDF" icon="document-outline" color="#F4C542" onPress={generatePdf} />
+        <DownloadBtn label="Gerar Excel" icon="grid-outline" color="#4CAF50" onPress={generateCsv} />
       </View>
     </SafeAreaView>
   );
@@ -461,41 +640,6 @@ function DownloadBtn({ label, color, icon, onPress }: DownloadBtnProps) {
       {icon && <Ionicons name={icon} size={20} color="#0A1F44" style={{ marginRight: 8 }} />}
       <Text style={styles.downloadBtnText}>{label}</Text>
     </TouchableOpacity>
-  );
-}
-
-type StatusBadgeProps = { status: string };
-function StatusBadge({ status }: StatusBadgeProps) {
-  let color = '#B0B3C7';
-  let bg = '#222B44';
-  let label = status || 'Pendente';
-  
-  switch (status) {
-    case 'Aprovado':
-      color = '#fff';
-      bg = '#4CAF50';
-      break;
-    case 'Atraso':
-      color = '#fff';
-      bg = '#FF9800'; 
-      break;
-    case 'Falta':
-      color = '#fff';
-      bg = '#FF6B6B';
-      break;
-    case 'Pendente':
-      color = '#0A1F44';
-      bg = '#F4C542';
-      break;
-    default:
-      color = '#B0B3C7';
-      bg = '#222B44';
-  }
-  
-  return (
-    <View style={[styles.statusBadge, { backgroundColor: bg }]}>
-      <Text style={[styles.statusBadgeText, { color }]}>{label}</Text>
-    </View>
   );
 }
 
@@ -689,19 +833,5 @@ const styles = StyleSheet.create({
   },
   backBtn: {
     padding: 8,
-  },
-  statusBadge: {
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 70,
-    alignSelf: 'center',
-  },
-  statusBadgeText: {
-    fontWeight: 'bold',
-    fontSize: 13,
-    textAlign: 'center',
   },
 });

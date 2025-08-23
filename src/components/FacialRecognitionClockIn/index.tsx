@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Dimensions, Linking } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Dimensions, Linking, Animated } from "react-native";
 import { CameraView, useCameraPermissions, CameraPictureOptions } from "expo-camera";
 import { ButtonLogin } from "../ButtonLogin";
 import { router } from "expo-router";
@@ -19,9 +19,78 @@ export default function FacialRecognitionClockIn() {
   const [employeeData, setEmployeeData] = useState<any>(null);
   const [cameraType, setCameraType] = useState<"front" | "back">("front");
 
+  // Animações para o reconhecimento facial
+  const scanAnimation = useRef(new Animated.Value(0)).current;
+  const pulseAnimation = useRef(new Animated.Value(1)).current;
+  const borderAnimation = useRef(new Animated.Value(0)).current;
+
   useEffect(() => {
     if (!permission) requestPermission();
   }, [permission]);
+
+  // Animação de scanning quando está processando
+  useEffect(() => {
+    if (isScanning) {
+      startScanAnimation();
+      startPulseAnimation();
+      startBorderAnimation();
+    } else {
+      stopAllAnimations();
+    }
+  }, [isScanning]);
+
+  const startScanAnimation = () => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(scanAnimation, {
+          toValue: 1,
+          duration: 2000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(scanAnimation, {
+          toValue: 0,
+          duration: 100,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  };
+
+  const startPulseAnimation = () => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnimation, {
+          toValue: 1.05,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnimation, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  };
+
+  const startBorderAnimation = () => {
+    Animated.loop(
+      Animated.timing(borderAnimation, {
+        toValue: 1,
+        duration: 1500,
+        useNativeDriver: false,
+      })
+    ).start();
+  };
+
+  const stopAllAnimations = () => {
+    scanAnimation.stopAnimation();
+    pulseAnimation.stopAnimation();
+    borderAnimation.stopAnimation();
+    scanAnimation.setValue(0);
+    pulseAnimation.setValue(1);
+    borderAnimation.setValue(0);
+  };
 
   const handleStartScan = async (type: "entrada" | "saida" | "almoco") => {
     if (!permission?.granted || !cameraRef.current) {
@@ -104,9 +173,11 @@ export default function FacialRecognitionClockIn() {
     });
     const currentDate = new Date().toLocaleDateString("pt-BR");
 
+    const typeText = type === "entrada" ? "Entrada" : type === "saida" ? "Saída" : "Almoço";
+
     Alert.alert(
       "Ponto Registrado",
-      `${type === "entrada" ? "Entrada" : type === "saida" ? "Saída" : "Almoço"} registrada com sucesso!\n\nData: ${currentDate}\nHorário: ${currentTime}`,
+      `${typeText} registrada com sucesso!\n\nData: ${currentDate}\nHorário: ${currentTime}`,
       [{ text: "OK", onPress: () => router.replace("/manager/home") }]
     );
   };
@@ -131,6 +202,16 @@ export default function FacialRecognitionClockIn() {
       </View>
     );
   }
+
+  const scanLineTranslateY = scanAnimation.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, width * 0.6 - 4],
+  });
+
+  const borderColor = borderAnimation.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: ["#F4C542", "#4CAF50", "#F4C542"],
+  });
 
   return (
     <View style={styles.container}>
@@ -171,9 +252,18 @@ export default function FacialRecognitionClockIn() {
         </View>
       ) : (
         <View style={styles.userInfoContainer}>
-          <Text style={styles.userInfoTitle}>Aguardando Detecção:</Text>
-          <Text style={styles.userInfoText}>Posicione seu rosto na área da câmera</Text>
-          <Text style={styles.userInfoText}>Aguarde o reconhecimento facial...</Text>
+          <Text style={styles.userInfoTitle}>
+            {isScanning ? "Processando..." : "Aguardando Detecção:"}
+          </Text>
+          <Text style={styles.userInfoText}>
+            {isScanning 
+              ? `Reconhecendo rosto para ${clockInType === "entrada" ? "entrada" : clockInType === "saida" ? "saída" : "almoço"}...` 
+              : "Posicione seu rosto na área da câmera"
+            }
+          </Text>
+          {!isScanning && (
+            <Text style={styles.userInfoText}>Selecione uma opção abaixo para iniciar</Text>
+          )}
         </View>
       )}
 
@@ -181,12 +271,63 @@ export default function FacialRecognitionClockIn() {
         <TouchableOpacity style={styles.flipButton} onPress={handleToggleCamera}>
           <Ionicons name="camera-reverse-outline" size={24} color="#F4C542" />
         </TouchableOpacity>
-        <CameraView
-          ref={cameraRef}
-          style={styles.cameraFrame}
-          facing={cameraType}
-          ratio="4:3"
-        />
+        
+        <View style={styles.cameraContainer}>
+          <Animated.View
+            style={[
+              styles.cameraWrapper,
+              {
+                transform: [{ scale: pulseAnimation }],
+              },
+            ]}
+          >
+            <Animated.View 
+              style={[
+                styles.cameraFrame,
+                {
+                  borderColor: isScanning ? borderColor : "#F4C542",
+                }
+              ]}
+            >
+              <CameraView
+                ref={cameraRef}
+                style={styles.camera}
+                facing={cameraType}
+                ratio="4:3"
+              />
+              
+              {/* Animação de linha de scanning */}
+              {isScanning && (
+                <Animated.View
+                  style={[
+                    styles.scanLine,
+                    {
+                      transform: [{ translateY: scanLineTranslateY }],
+                    },
+                  ]}
+                />
+              )}
+              
+              {/* Cantos da moldura */}
+              <View style={[styles.corner, styles.topLeft]} />
+              <View style={[styles.corner, styles.topRight]} />
+              <View style={[styles.corner, styles.bottomLeft]} />
+              <View style={[styles.corner, styles.bottomRight]} />
+            </Animated.View>
+          </Animated.View>
+          
+          {/* Status de scanning */}
+          {isScanning && (
+            <View style={styles.scanStatus}>
+              <View style={styles.scanStatusDots}>
+                <View style={[styles.dot, { backgroundColor: '#F4C542' }]} />
+                <View style={[styles.dot, { backgroundColor: '#F4C542', opacity: 0.7 }]} />
+                <View style={[styles.dot, { backgroundColor: '#F4C542', opacity: 0.4 }]} />
+              </View>
+              <Text style={styles.scanStatusText}>Analisando rosto...</Text>
+            </View>
+          )}
+        </View>
       </View>
 
       <View style={styles.instructionsContainer}>
@@ -206,30 +347,29 @@ export default function FacialRecognitionClockIn() {
       <View style={styles.buttonContainer}>
         {!isScanning ? (
           <View style={styles.clockInButtons}>
-            <ButtonLogin
-              icon="log-in-outline"
-              title="Bater Entrada"
+            <TouchableOpacity
+              style={[styles.compactButton, styles.entradaButton]}
               onPress={() => handleStartScan("entrada")}
-              backgroundColor="#4CAF50"
-              textColor="#FFFFFF"
-              iconColor="#FFFFFF"
-            />
-            <ButtonLogin
-              icon="log-out-outline"
-              title="Bater Saída"
-              onPress={() => handleStartScan("saida")}
-              backgroundColor="#F44336"
-              textColor="#FFFFFF"
-              iconColor="#FFFFFF"
-            />
-            <ButtonLogin
-              icon="restaurant-outline"
-              title="Bater Almoço"
+            >
+              <Ionicons name="log-in-outline" size={20} color="#FFFFFF" />
+              <Text style={styles.compactButtonText}>Entrada</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[styles.compactButton, styles.almocoButton]}
               onPress={() => handleStartScan("almoco")}
-              backgroundColor="#FF9800"
-              textColor="#FFFFFF"
-              iconColor="#FFFFFF"
-            />
+            >
+              <Ionicons name="restaurant-outline" size={20} color="#FFFFFF" />
+              <Text style={styles.compactButtonText}>Almoço</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[styles.compactButton, styles.saidaButton]}
+              onPress={() => handleStartScan("saida")}
+            >
+              <Ionicons name="log-out-outline" size={20} color="#FFFFFF" />
+              <Text style={styles.compactButtonText}>Saída</Text>
+            </TouchableOpacity>
           </View>
         ) : (
           <View style={styles.scanningButton}>
@@ -335,13 +475,83 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 16,
   },
+  cameraContainer: {
+    position: "relative",
+    alignItems: "center",
+  },
+  cameraWrapper: {
+    position: "relative",
+  },
   cameraFrame: {
+    borderRadius: 16,
+    borderWidth: 3,
+    overflow: "hidden",
+    position: "relative",
+  },
+  camera: {
     width: width * 0.8,
     height: width * 0.6,
-    borderRadius: 16,
-    borderWidth: 2,
+  },
+  scanLine: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    height: 2,
+    backgroundColor: "#4CAF50",
+    shadowColor: "#4CAF50",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  corner: {
+    position: "absolute",
+    width: 20,
+    height: 20,
     borderColor: "#F4C542",
-    overflow: "hidden",
+  },
+  topLeft: {
+    top: 10,
+    left: 10,
+    borderTopWidth: 3,
+    borderLeftWidth: 3,
+  },
+  topRight: {
+    top: 10,
+    right: 10,
+    borderTopWidth: 3,
+    borderRightWidth: 3,
+  },
+  bottomLeft: {
+    bottom: 10,
+    left: 10,
+    borderBottomWidth: 3,
+    borderLeftWidth: 3,
+  },
+  bottomRight: {
+    bottom: 10,
+    right: 10,
+    borderBottomWidth: 3,
+    borderRightWidth: 3,
+  },
+  scanStatus: {
+    alignItems: "center",
+    marginTop: 12,
+  },
+  scanStatusDots: {
+    flexDirection: "row",
+    marginBottom: 8,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginHorizontal: 3,
+  },
+  scanStatusText: {
+    color: "#F4C542",
+    fontSize: 14,
+    fontWeight: "600",
   },
   flipButton: {
     alignSelf: "center",
@@ -378,8 +588,36 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   clockInButtons: {
+    flexDirection: "row",
     width: "100%",
-    gap: 12,
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  compactButton: {
+    flex: 1,
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 16,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+    minHeight: 70,
+  },
+  compactButtonText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "600",
+    marginTop: 4,
+    textAlign: "center",
+  },
+  entradaButton: {
+    backgroundColor: "#4CAF50",
+  },
+  almocoButton: {
+    backgroundColor: "#FF9800",
+  },
+  saidaButton: {
+    backgroundColor: "#F44336",
   },
   scanningButton: {
     flexDirection: "row",
