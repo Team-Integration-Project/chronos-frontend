@@ -41,6 +41,14 @@ export default function ReportIndividualScreen() {
         if (startDate && endDate) {
           queryParams.push(`start_date=${startDate}`);
           queryParams.push(`end_date=${endDate}`);
+        } else if (period === "hoje") {
+          const today = new Date();
+          const year = today.getFullYear();
+          const month = String(today.getMonth() + 1).padStart(2, '0');
+          const day = String(today.getDate()).padStart(2, '0');
+          const formattedDate = `${year}-${month}-${day}`;
+          queryParams.push(`start_date=${formattedDate}`);
+          queryParams.push(`end_date=${formattedDate}`);
         } else {
           queryParams.push(`period=${period}`);
         }
@@ -558,7 +566,7 @@ export default function ReportIndividualScreen() {
           horizontal 
           showsHorizontalScrollIndicator={true} 
           style={{ marginHorizontal: 12, marginTop: 10 }} 
-          contentContainerStyle={{ minWidth: 500, paddingBottom: 32 }}
+          contentContainerStyle={styles.contentContainer}
         >
           <View style={styles.tableSection}>
             <View style={styles.tableHeader}>
@@ -833,5 +841,22 @@ const styles = StyleSheet.create({
   },
   backBtn: {
     padding: 8,
+  },
+  statusBadge: {
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 70,
+    alignSelf: 'center',
+  },
+  statusBadgeText: {
+    fontWeight: 'bold',
+    fontSize: 13,
+    textAlign: 'center',
+  },
+  contentContainer: {
+    flexGrow: 1,
   },
 });

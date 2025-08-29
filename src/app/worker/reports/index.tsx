@@ -27,7 +27,26 @@ export default function WorkerReportsScreen() {
       setLoading(true);
       setError(null);
       try {
-          const response = await api.get(`/attendance/me/?period=${period}`);
+          let apiUrl = `/attendance/me/`;
+          const queryParams = [];
+
+          if (period === "hoje") {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
+            const formattedDate = `${year}-${month}-${day}`;
+            queryParams.push(`start_date=${formattedDate}`);
+            queryParams.push(`end_date=${formattedDate}`);
+          } else {
+            queryParams.push(`period=${period}`);
+          }
+
+          if (queryParams.length > 0) {
+            apiUrl += `?${queryParams.join('&')}`;
+          }
+
+          const response = await api.get(apiUrl);
           setReportData(response.data);
           setAttendances(response.data.attendances || []); 
       } catch (err: any) {
@@ -48,91 +67,272 @@ export default function WorkerReportsScreen() {
       const userName = reportData?.user || 'N/A';
       const userCpf = reportData?.stats?.cpf || 'N/A';
       const userRole = reportData?.stats?.role || 'N/A';
+      const currentDate = new Date().toLocaleDateString('pt-BR');
+      const currentTime = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
       const htmlContent = `
+        <!DOCTYPE html>
         <html>
         <head>
+          <meta charset="UTF-8">
           <style>
-            body { font-family: Arial, sans-serif; margin: 20px; }
-            h1 { color: #0A1F44; text-align: center; }
-            h2 { color: #333; margin-top: 20px; }
-            p { margin-bottom: 5px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-            th { background-color: #f2f2f2; }
-            .summary-card {
-              display: inline-block;
-              width: 23%; /* Approx 4 cards per row */
-              margin-right: 2%;
-              border: 1px solid #ccc;
-              border-radius: 8px;
-              padding: 10px;
-              text-align: center;
+            * {
+              margin: 0;
+              padding: 0;
               box-sizing: border-box;
             }
-            .summary-value { font-weight: bold; font-size: 1.2em; }
-            .summary-label { font-size: 0.9em; color: #555; }
+            
+            body { 
+              font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+              line-height: 1.6;
+              color: #333;
+              background: #f8f9fa;
+            }
+            
+            .container {
+              max-width: 800px;
+              margin: 0 auto;
+              padding: 40px;
+              background: white;
+              box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            }
+            
+            .header {
+              text-align: center;
+              margin-bottom: 40px;
+              padding-bottom: 20px;
+              border-bottom: 3px solid #0A1F44;
+            }
+            
+            .header h1 {
+              color: #0A1F44;
+              font-size: 28px;
+              font-weight: 700;
+              margin-bottom: 10px;
+            }
+            
+            .header .subtitle {
+              color: #666;
+              font-size: 16px;
+              font-weight: 400;
+            }
+            
+            .employee-info {
+              background: linear-gradient(135deg, #0A1F44 0%, #142850 100%);
+              color: white;
+              padding: 25px;
+              border-radius: 12px;
+              margin-bottom: 30px;
+              text-align: center;
+            }
+            
+            .employee-info h2 {
+              font-size: 24px;
+              margin-bottom: 8px;
+              color: #F4C542;
+            }
+            
+            .employee-info .meta {
+              font-size: 14px;
+              opacity: 0.9;
+            }
+            
+            .stats-grid {
+              display: grid;
+              grid-template-columns: repeat(2, 1fr);
+              gap: 20px;
+              margin-bottom: 40px;
+            }
+            
+            .stat-card {
+              background: white;
+              border: 2px solid;
+              border-radius: 12px;
+              padding: 20px;
+              text-align: center;
+              box-shadow: 0 4px 6px rgba(0,0,0,0.07);
+              transition: transform 0.2s;
+            }
+            
+            .stat-card.hours { border-color: #4CAF50; }
+            .stat-card.absences { border-color: #FF6B6B; }
+            .stat-card.delays { border-color: #FF9800; }
+            .stat-card.justifications { border-color: #2196F3; }
+            
+            .stat-value {
+              font-size: 32px;
+              font-weight: 700;
+              margin-bottom: 5px;
+              color: #0A1F44;
+            }
+            
+            .stat-card.hours .stat-value { color: #4CAF50; }
+            .stat-card.absences .stat-value { color: #FF6B6B; }
+            .stat-card.delays .stat-value { color: #FF9800; }
+            .stat-card.justifications .stat-value { color: #2196F3; }
+            
+            .stat-label {
+              font-size: 14px;
+              color: #666;
+              text-transform: uppercase;
+              letter-spacing: 1px;
+              font-weight: 600;
+            }
+            
+            .table-section {
+              margin-top: 30px;
+            }
+            
+            .table-title {
+              color: #0A1F44;
+              font-size: 20px;
+              font-weight: 700;
+              margin-bottom: 20px;
+              display: flex;
+              align-items: center;
+            }
+            
+            .table-title::before {
+              content: "📋";
+              margin-right: 10px;
+              font-size: 22px;
+            }
+            
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              background: white;
+              border-radius: 8px;
+              overflow: hidden;
+              box-shadow: 0 4px 6px rgba(0,0,0,0.07);
+            }
+            
+            th {
+              background: linear-gradient(135deg, #0A1F44 0%, #142850 100%);
+              color: #F4C542;
+              padding: 16px 12px;
+              text-align: center;
+              font-weight: 600;
+              font-size: 14px;
+              text-transform: uppercase;
+              letter-spacing: 0.5px;
+            }
+            
+            td {
+              padding: 14px 12px;
+              text-align: center;
+              border-bottom: 1px solid #e9ecef;
+              font-size: 14px;
+            }
+            
+            tbody tr:nth-child(even) {
+              background-color: #f8f9fa;
+            }
+            
+            tbody tr:hover {
+              background-color: #e3f2fd;
+            }
+            
+            .no-data {
+              text-align: center;
+              padding: 40px;
+              color: #666;
+              font-style: italic;
+            }
+            
+            .footer {
+              margin-top: 50px;
+              padding-top: 20px;
+              border-top: 2px solid #e9ecef;
+              text-align: center;
+              color: #666;
+              font-size: 12px;
+            }
+            
+            .footer .generated-info {
+              margin-bottom: 10px;
+              font-weight: 500;
+            }
+            
+            @media print {
+              body { background: white; }
+              .container { box-shadow: none; }
+            }
           </style>
         </head>
         <body>
-          <h1>Meu Relatório de Atendimentos</h1>
-          <h2>Informações do Funcionário</h2>
-          <p><strong>Nome:</strong> ${userName}</p>
-          <p><strong>CPF:</strong> ${userCpf}</p>
-          <p><strong>Função:</strong> ${userRole}</p>
+          <div class="container">
+            <div class="header">
+              <h1>Relatório de Ponto Eletrônico</h1>
+              <div class="subtitle">Sistema de Controle de Frequência</div>
+            </div>
 
-          <h2>Estatísticas do Período (${selectedPeriod === 'mes' ? 'Mês' : selectedPeriod === 'ano' ? 'Ano' : 'Dia'})</h2>
-          <div style="display: flex; flex-wrap: wrap; justify-content: space-around;">
-            <div class="summary-card" style="border-color: #F4C542;">
-              <p class="summary-value">${reportData.stats?.dias_trabalhados || 0}</p>
-              <p class="summary-label">Dias Trabalhados</p>
+            <div class="employee-info">
+              <h2>${userName}</h2>
+              <div class="meta">Relatório gerado em ${currentDate} às ${currentTime}</div>
             </div>
-            <div class="summary-card" style="border-color: #4CAF50;">
-              <p class="summary-value">${reportData.stats?.total_pontos_registrados || 0}</p>
-              <p class="summary-label">Pontos Registrados</p>
+
+            <div class="stats-grid">
+              <div class="stat-card hours">
+                <div class="stat-value">${reportData.stats?.horas_trabalhadas_total?.toFixed(1) || 0}h</div>
+                <div class="stat-label">Horas Trabalhadas</div>
+              </div>
+              <div class="stat-card absences">
+                <div class="stat-value">${reportData.stats?.total_faltas || 0}</div>
+                <div class="stat-label">Faltas Registradas</div>
+              </div>
+              <div class="stat-card delays">
+                <div class="stat-value">${reportData.stats?.total_atrasos || 0}</div>
+                <div class="stat-label">Atrasos (Após 07:00)</div>
+              </div>
+              <div class="stat-card justifications">
+                <div class="stat-value">${reportData.stats?.total_justificativas || 0}</div>
+                <div class="stat-label">Justificativas</div>
+              </div>
             </div>
-            <div class="summary-card" style="border-color: #2196F3;">
-              <p class="summary-value">${reportData.stats?.total_justificativas || 0}</p>
-              <p class="summary-label">Justificativas</p>
+
+            <div class="table-section">
+              <h2 class="table-title">Registros de Ponto</h2>
+              ${attendances.length > 0 ? `
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Data</th>
+                      <th>Entrada</th>
+                      <th>Almoço</th>
+                      <th>Saída</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${attendances.map(r => `
+                      <tr>
+                        <td><strong>${r.date || '—'}</strong></td>
+                        <td>${r.entrada || '—'}</td>
+                        <td>${r.entrada_almoco || '—'}</td>
+                        <td>${r.saida || '—'}</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              ` : `
+                <div class="no-data">
+                  📅 Nenhum registro de ponto encontrado para o período selecionado
+                </div>
+              `}
             </div>
-            <div class="summary-card" style="border-color: #F4C542;">
-              <p class="summary-value">${reportData.stats?.horas_trabalhadas_total || 0}</p>
-              <p class="summary-label">Horas Trabalhadas</p>
+
+            <div class="footer">
+              <div class="generated-info">
+                Relatório gerado automaticamente pelo Sistema de Ponto Eletrônico
+              </div>
+              <div>Data de geração: ${currentDate} • Horário: ${currentTime}</div>
             </div>
           </div>
-
-          ${attendances.length > 0 ? `
-            <h2>Registros de Ponto Detalhados</h2>
-            <table>
-              <thead>
-                <tr>
-                  <th>Data</th>
-                  <th>Entrada</th>
-                  <th>Almoço</th>
-                  <th>Saída</th>
-                  <th>Status</th>
-                  <th>Observação</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${attendances.map(r => `
-                  <tr>
-                    <td>${r.date || '-'}</td>
-                    <td>${r.entrada || '-'}</td>
-                    <td>${r.entrada_almoco || '-'}</td>
-                    <td>${r.saida || '-'}</td>
-                    <td>${r.status || '-'}</td>
-                    <td>${r.observacao || '-'}</td>
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
-          ` : '<p>Nenhum registro de ponto detalhado encontrado para este período.</p>'}
         </body>
         </html>
       `;
 
-      const fileName = `Meu_Relatorio_Atendimentos_${(reportData?.user || 'User').replace(/\s/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+      const fileName = `Meu_Relatorio_Ponto_${userName.replace(/\s/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
 
       if (Platform.OS === 'android') {
         const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
@@ -142,18 +342,25 @@ export default function WorkerReportsScreen() {
             fileName,
             'application/pdf'
           );
-          const { uri: tempUri } = await Print.printToFileAsync({ html: htmlContent });
+          const { uri: tempUri } = await Print.printToFileAsync({ 
+            html: htmlContent,
+            base64: false
+          });
           const fileContent = await FileSystem.readAsStringAsync(tempUri, { encoding: FileSystem.EncodingType.Base64 });
           await FileSystem.writeAsStringAsync(uri, fileContent, { encoding: FileSystem.EncodingType.Base64 });
-          Alert.alert("Sucesso", `PDF salvo. Você pode acessá-lo usando um gerenciador de arquivos.`);
+          Alert.alert("Sucesso", `PDF salvo com sucesso! Você pode acessá-lo usando um gerenciador de arquivos.`);
         } else {
           Alert.alert("Erro", "Permissão negada para acessar o diretório.");
         }
       } else {
-        const { uri } = await Print.printToFileAsync({ html: htmlContent });
+        const { uri } = await Print.printToFileAsync({ 
+          html: htmlContent,
+          base64: false
+        });
         await Sharing.shareAsync(uri);
-        Alert.alert("Sucesso", "PDF gerado e pronto para salvar ou compartilhar.");
+        Alert.alert("Sucesso", "PDF gerado com sucesso e pronto para salvar ou compartilhar!");
       }
+
     } catch (error) {
       console.error('Erro ao gerar PDF:', error);
       Alert.alert("Erro", "Não foi possível gerar o PDF. Tente novamente.");
@@ -165,7 +372,15 @@ export default function WorkerReportsScreen() {
   const generateCsv = async () => {
     setLoading(true);
     try {
-      let csvContent = `Informações do Funcionário\nNome:,${reportData?.user || 'N/A'}\nCPF:,${reportData?.stats?.cpf || 'N/A'}\nFunção:,${reportData?.stats?.role || 'N/A'}\n\nEstatísticas do Período (${selectedPeriod === 'mes' ? 'Mês' : selectedPeriod === 'ano' ? 'Ano' : 'Dia'})\n`;
+      const userName = reportData?.user || 'N/A';
+      const userCpf = reportData?.stats?.cpf || 'N/A';
+      const userRole = reportData?.stats?.role || 'N/A';
+      const currentDate = new Date().toLocaleDateString('pt-BR');
+      const currentTime = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+      let csvContent = `Informações do Funcionário\nNome:,${userName}\nCPF:,${userCpf}\nFunção:,Terceirizado\n\n`
+
+      csvContent += `Estatísticas do Período (${selectedPeriod === 'mes' ? 'Mês' : selectedPeriod === 'ano' ? 'Ano' : 'Dia'})\n`;
       csvContent += `Dias Trabalhados:,${reportData.stats?.dias_trabalhados || 0}\n`;
       csvContent += `Pontos Registrados:,${reportData.stats?.total_pontos_registrados || 0}\n`;
       csvContent += `Justificativas:,${reportData.stats?.total_justificativas || 0}\n`;
@@ -179,7 +394,7 @@ export default function WorkerReportsScreen() {
         });
       }
 
-      const fileName = `Meu_Relatorio_Atendimentos_${(reportData?.user || 'User').replace(/\s/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`;
+      const fileName = `Meu_Relatorio_Ponto_${userName.replace(/\s/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`;
 
       if (Platform.OS === 'android') {
         const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
@@ -190,7 +405,7 @@ export default function WorkerReportsScreen() {
             'text/csv'
           );
           await FileSystem.writeAsStringAsync(uri, csvContent);
-          Alert.alert("Sucesso", `CSV salvo. Você pode acessá-lo usando um gerenciador de arquivos.`);
+          Alert.alert("Sucesso", `CSV salvo com sucesso! Você pode acessá-lo usando um gerenciador de arquivos.`);
         } else {
           Alert.alert("Erro", "Permissão negada para acessar o diretório.");
         }
@@ -198,7 +413,7 @@ export default function WorkerReportsScreen() {
         const tempPath = `${FileSystem.cacheDirectory}${fileName}`;
         await FileSystem.writeAsStringAsync(tempPath, csvContent);
         await Sharing.shareAsync(tempPath);
-        Alert.alert("Sucesso", "CSV gerado e pronto para salvar ou compartilhar.");
+        Alert.alert("Sucesso", "CSV gerado com sucesso e pronto para salvar ou compartilhar!");
       }
     } catch (error) {
       console.error('Erro ao gerar CSV:', error);
@@ -218,7 +433,7 @@ export default function WorkerReportsScreen() {
         <View style={{ width: 32 }} />
       </View>
       
-      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles.container} showsVerticalScrollIndicator={false} contentContainerStyle={styles.contentContainer}>
         <View style={styles.periodFilter}>
           <Text style={styles.filterTitle}>Período:</Text>
           <View style={styles.periodButtons}>
@@ -257,7 +472,7 @@ export default function WorkerReportsScreen() {
               <Text style={styles.infoTitle}>Informações do Funcionário</Text>
               <Text style={styles.infoText}>Nome: {reportData.user || 'N/A'}</Text>
               <Text style={styles.infoText}>CPF: {reportData.stats?.cpf || 'N/A'}</Text>
-              <Text style={styles.infoText}>Função: {reportData.stats?.role || 'N/A'}</Text>
+              <Text style={styles.infoText}>Função: Terceirizado </Text>
             </View>
 
             <View style={styles.statsContainer}>
@@ -344,6 +559,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingHorizontal: 16,
+  },
+  contentContainer: {
+    flexGrow: 1,
   },
   periodFilter: {
     marginBottom: 20,

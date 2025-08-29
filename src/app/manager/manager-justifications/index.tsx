@@ -41,7 +41,6 @@ export default function ManagerJustificationsScreen() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  // Função melhorada para mapear status
   const mapJustificationStatus = (item: any): Status => {
     console.log(`Mapeando status para item ${item.id}:`, {
       approval: item.approval,
@@ -49,7 +48,6 @@ export default function ManagerJustificationsScreen() {
       status: item.status
     });
 
-    // Lógica de mapeamento mais robusta
     if (item.status === 'aprovada' || item.status === 'approved') {
       return "aprovada";
     } else if (item.status === 'recusada' || item.status === 'rejected') {
@@ -63,7 +61,6 @@ export default function ManagerJustificationsScreen() {
     }
   };
 
-  // Função para buscar justificativas
   const fetchJustifications = async () => {
     try {
       setLoading(true);
@@ -98,7 +95,6 @@ export default function ManagerJustificationsScreen() {
     }
   };
 
-  // Efeito para carregar justificativas ao montar o componente
   useEffect(() => {
     fetchJustifications();
   }, []);
@@ -116,19 +112,16 @@ export default function ManagerJustificationsScreen() {
       console.log("Resposta de aprovação:", response.data);
       
       if (response.status === 200) {
-        // Atualizar estado local imediatamente para feedback visual
         setJustifications((prev) =>
           prev.map((j) => (j.id === id ? { ...j, status: "aprovada" } : j))
         );
         
-        // Atualizar item selecionado se for o mesmo
         if (selected && selected.id === id) {
           setSelected({ ...selected, status: "aprovada" });
         }
         
         Alert.alert("Sucesso", "Justificativa aprovada com sucesso!");
         
-        // Recarregar dados em background para sincronizar
         setTimeout(fetchJustifications, 1000);
         
       } else {
@@ -155,19 +148,16 @@ export default function ManagerJustificationsScreen() {
       console.log("Resposta de reprovação:", response.data);
       
       if (response.status === 200) {
-        // Atualizar estado local imediatamente para feedback visual
         setJustifications((prev) =>
           prev.map((j) => (j.id === id ? { ...j, status: "recusada" } : j))
         );
         
-        // Atualizar item selecionado se for o mesmo
         if (selected && selected.id === id) {
           setSelected({ ...selected, status: "recusada" });
         }
         
         Alert.alert("Sucesso", "Justificativa reprovada com sucesso!");
         
-        // Recarregar dados em background para sincronizar
         setTimeout(fetchJustifications, 1000);
         
       } else {
@@ -267,14 +257,18 @@ export default function ManagerJustificationsScreen() {
             {selected && (
               <>
                 <Text style={styles.modalTitle}>Detalhes da Justificativa</Text>
-                <Text style={styles.modalLabel}>Funcionário:</Text>
-                <Text style={styles.modalValue}>{selected.employee}</Text>
-                <Text style={styles.modalLabel}>Motivo:</Text>
-                <Text style={styles.modalValue}>{selected.reason}</Text>
-                <Text style={styles.modalLabel}>Data:</Text>
-                <Text style={styles.modalValue}>{selected.date}</Text>
-                <Text style={styles.modalLabel}>Descrição:</Text>
-                <Text style={styles.modalValue}>{selected.details}</Text>
+                <View style={styles.modalInfoRow}>
+                  <Text style={styles.modalLabel}>Funcionário:</Text>
+                  <Text style={styles.modalValue}>{selected.employee}</Text>
+                </View>
+                <View style={styles.modalInfoRow}>
+                  <Text style={styles.modalLabel}>Motivo:</Text>
+                  <Text style={styles.modalValue}>{selected.reason}</Text>
+                </View>
+                <View style={styles.modalInfoRow}>
+                  <Text style={styles.modalLabel}>Data:</Text>
+                  <Text style={styles.modalValue}>{selected.date}</Text>
+                </View>
                 <View style={styles.modalStatusRow}>
                   <Text style={styles.modalLabel}>Status:</Text>
                   <View style={[styles.statusModal, { backgroundColor: STATUS_COLORS[selected.status] }]}>
@@ -313,7 +307,6 @@ export default function ManagerJustificationsScreen() {
                   </View>
                 )}
 
-                {/* Mostrar informações adicionais para justificativas já processadas */}
                 {selected.status !== "pendente" && (
                   <View style={styles.processedInfo}>
                     <Text style={styles.processedInfoText}>
@@ -429,6 +422,7 @@ const styles = StyleSheet.create({
     width: "90%",
     maxWidth: 400,
     alignItems: "center",
+    marginBottom: 20,
   },
   modalTitle: {
     color: "#F4C542",
@@ -440,37 +434,42 @@ const styles = StyleSheet.create({
   modalLabel: {
     color: "#B0B3C7",
     fontSize: 16,
-    marginTop: 6,
     fontWeight: "600",
-    alignSelf: "flex-start",
-    width: "100%",
+    marginRight: 10,
+    flexShrink: 0,
   },
   modalValue: {
     color: "#fff",
     fontSize: 15,
     fontWeight: "500",
-    marginBottom: 8,
-    alignSelf: "flex-start",
+    flex: 1,
+    textAlign: "right",
+  },
+  modalInfoRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
     width: "100%",
+    marginBottom: 12,
   },
   modalStatusRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 8,
-    marginBottom: 16,
+    justifyContent: "space-between",
+    marginTop: 15,
+    marginBottom: 20,
     width: "100%",
   },
   modalActions: {
     flexDirection: "row",
     justifyContent: "space-between",
     width: "100%",
-    marginTop: 10,
+    marginTop: 15,
     gap: 12,
   },
   actionBtn: {
     flex: 1,
     borderRadius: 8,
-    paddingVertical: 12,
+    paddingVertical: 14,
     alignItems: "center",
     flexDirection: "row",
     justifyContent: "center",
@@ -483,12 +482,12 @@ const styles = StyleSheet.create({
   closeBtn: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 18,
+    marginTop: 20,
     alignSelf: "center",
     backgroundColor: "#1A2A4F",
-    borderRadius: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 24,
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 28,
   },
   closeText: {
     color: "#B0B3C7",
@@ -498,12 +497,12 @@ const styles = StyleSheet.create({
   },
   statusModal: {
     borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     alignItems: "center",
     justifyContent: "center",
     minWidth: 80,
-    marginLeft: 8,
+    borderRadius: 10,
   },
   statusTextModal: {
     color: "#333",

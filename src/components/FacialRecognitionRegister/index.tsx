@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Dimensions, ScrollView, Linking } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Dimensions, ScrollView, Linking, Animated, Modal } from "react-native";
 import { CameraView, useCameraPermissions, CameraPictureOptions } from "expo-camera";
 import { ButtonLogin } from "../ButtonLogin"; 
 import { router, useLocalSearchParams } from "expo-router";
@@ -20,6 +20,100 @@ interface UserData {
   role: string;
 }
 
+interface CustomSuccessModalProps {
+  visible: boolean;
+  onClose: () => void;
+  employeeData: UserData | null;
+  isError?: boolean;
+  errorMessage?: string;
+}
+
+const CustomSuccessModal: React.FC<CustomSuccessModalProps> = ({
+  visible,
+  onClose,
+  employeeData,
+  isError = false,
+  errorMessage,
+}) => {
+  if (!visible) return null;
+
+  const currentTime = new Date().toLocaleTimeString("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+  const currentDate = new Date().toLocaleDateString("pt-BR");
+
+  return (
+    <Modal
+      transparent={true}
+      visible={visible}
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <View style={styles.successIcon}>
+              <Ionicons
+                name={isError ? "close-circle" : "checkmark-circle"}
+                size={40}
+                color={isError ? "#F44336" : "#4CAF50"}
+              />
+            </View>
+            <Text style={styles.modalTitle}>
+              {isError ? "Erro no Registro" : "Registro Concluído"}
+            </Text>
+            <Text style={[styles.modalSubtitle, isError && styles.errorSubtitle]}>
+              {isError ? errorMessage || "Falha ao registrar usuário" : "Seu rosto foi registrado com sucesso!"}
+            </Text>
+          </View>
+
+          {!isError && employeeData && (
+            <View style={styles.modalContent}>
+              <View style={styles.timeInfo}>
+                <View style={styles.timeItem}>
+                  <Ionicons name="calendar-outline" size={16} color="#F4C542" />
+                  <Text style={styles.timeText}>{currentDate}</Text>
+                </View>
+                <View style={styles.timeItem}>
+                  <Ionicons name="time-outline" size={16} color="#F4C542" />
+                  <Text style={styles.timeText}>{currentTime}</Text>
+                </View>
+              </View>
+
+              <View style={styles.employeeInfo}>
+                <Text style={styles.employeeTitle}>Dados do Funcionário:</Text>
+                <View style={styles.employeeItem}>
+                  <Ionicons name="person-outline" size={16} color="#F4C542" />
+                  <Text style={styles.employeeText}>Nome: {employeeData?.username || "N/A"}</Text>
+                </View>
+                <View style={styles.employeeItem}>
+                  <Ionicons name="card-outline" size={16} color="#F4C542" />
+                  <Text style={styles.employeeText}>CPF: {employeeData?.cpf || "N/A"}</Text>
+                </View>
+                <View style={styles.employeeItem}>
+                  <Ionicons name="call-outline" size={16} color="#F4C542" />
+                  <Text style={styles.employeeText}>Telefone: {employeeData?.phone_number || "N/A"}</Text>
+                </View>
+              </View>
+            </View>
+          )}
+
+          <TouchableOpacity
+            style={[styles.modalButton, isError && styles.errorButton]}
+            onPress={onClose}
+          >
+            <Text style={[styles.modalButtonText, isError && styles.errorButtonText]}>
+              {isError ? "Tentar Novamente" : "OK"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
 export default function FacialRecognitionRegister() {
   const cameraRef = useRef<CameraView>(null);
   const [permission, requestPermission] = useCameraPermissions();
@@ -28,7 +122,13 @@ export default function FacialRecognitionRegister() {
   const [userData, setUserData] = useState<UserData | null>(null);
   const [faceDetected, setFaceDetected] = useState(false);
   const [cameraType, setCameraType] = useState<"front" | "back">("front");
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string>("");
   const params = useLocalSearchParams();
+  const scanAnimation = useRef(new Animated.Value(0)).current;
+  const pulseAnimation = useRef(new Animated.Value(1)).current;
+  const borderAnimation = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (!permission) {
@@ -45,31 +145,94 @@ export default function FacialRecognitionRegister() {
         setUserData(data);
       } catch (error) {
         console.error("Erro ao carregar dados do usuário:", error);
-        Alert.alert("Erro", "Dados do cadastro não encontrados. Volte ao cadastro.");
-        router.back();
+        setErrorMessage("Dados do cadastro não encontrados. Volte ao cadastro.");
+        setShowErrorModal(true);
       }
     } else {
-      Alert.alert("Erro", "Dados do cadastro não encontrados. Volte ao cadastro.");
-      router.back();
+      setErrorMessage("Dados do cadastro não encontrados. Volte ao cadastro.");
+      setShowErrorModal(true);
     }
   }, [params.userData, permission, requestPermission]);
 
+  useEffect(() => {
+    if (isScanning) {
+      startScanAnimation();
+      startPulseAnimation();
+      startBorderAnimation();
+    } else {
+      stopAllAnimations();
+    }
+  }, [isScanning]);
+
+  const startScanAnimation = () => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(scanAnimation, {
+          toValue: 1,
+          duration: 2000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(scanAnimation, {
+          toValue: 0,
+          duration: 100,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  };
+
+  const startPulseAnimation = () => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnimation, {
+          toValue: 1.05,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnimation, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  };
+
+  const startBorderAnimation = () => {
+    Animated.loop(
+      Animated.timing(borderAnimation, {
+        toValue: 1,
+        duration: 1500,
+        useNativeDriver: false,
+      })
+    ).start();
+  };
+
+  const stopAllAnimations = () => {
+    scanAnimation.stopAnimation();
+    pulseAnimation.stopAnimation();
+    borderAnimation.stopAnimation();
+    scanAnimation.setValue(0);
+    pulseAnimation.setValue(1);
+    borderAnimation.setValue(0);
+  };
+
   const handleStartScan = async () => {
     if (!permission?.granted) {
-      Alert.alert("Erro", "Permissão de câmera não concedida.", [
-        { text: "Abrir Configurações", onPress: () => Linking.openSettings() },
-        { text: "OK" },
-      ]);
+      setErrorMessage("Permissão de câmera não concedida.");
+      setShowErrorModal(true);
       return;
     }
 
     if (!cameraRef.current) {
-      Alert.alert("Erro", "Câmera não inicializada.");
+      setErrorMessage("Câmera não inicializada.");
+      setShowErrorModal(true);
       return;
     }
 
     if (!userData) {
-      Alert.alert("Erro", "Dados do usuário não encontrados.");
+      setErrorMessage("Dados do usuário não encontrados.");
+      setShowErrorModal(true);
       return;
     }
 
@@ -125,10 +288,12 @@ export default function FacialRecognitionRegister() {
           error.response?.data?.password?.[0] ||
           error.response?.data?.face_image?.[0] ||
           "Falha ao registrar usuário.";
-        Alert.alert("Erro", errorMessage);
+        setErrorMessage(errorMessage);
+        setShowErrorModal(true);
       } else {
         console.error("Erro desconhecido:", error);
-        Alert.alert("Erro", "Erro inesperado ao registrar usuário.");
+        setErrorMessage("Erro inesperado ao registrar usuário.");
+        setShowErrorModal(true);
       }
       setIsScanning(false);
     }
@@ -146,40 +311,28 @@ export default function FacialRecognitionRegister() {
 
   const handleScanComplete = () => {
     if (!userData) {
-      Alert.alert("Erro", "Dados do usuário não encontrados.");
+      setErrorMessage("Dados do usuário não encontrados.");
+      setShowErrorModal(true);
       return;
     }
 
     console.log("Dados do usuário registrados:", userData);
     console.log("Foto facial capturada e processada");
 
-    Alert.alert(
-      "Reconhecimento Concluído",
-      "Seu rosto foi registrado com sucesso!",
-      [
-        {
-          text: "OK",
-          onPress: () => {
-            console.log("Salvando tipo de usuário:", userData.role, "para email:", userData.email);
-            saveUserType(userData.email, userData.role);
+    setShowSuccessModal(true);
+  };
 
-            Alert.alert(
-              "Conta Criada",
-              `Conta criada com sucesso para ${userData.username}!`,
-              [
-                {
-                  text: "OK",
-                  onPress: () => {
-                    console.log("Redirecionando para login após reconhecimento facial");
-                    router.replace("/manager/profile");
-                  },
-                },
-              ]
-            );
-          },
-        },
-      ]
-    );
+  const handleCloseModal = () => {
+    setShowSuccessModal(false);
+    if (userData && userData.email && userData.role) {
+      saveUserType(userData.email, userData.role);
+    }
+    router.replace("/manager/home");
+  };
+
+  const handleCloseErrorModal = () => {
+    setShowErrorModal(false);
+    setErrorMessage("");
   };
 
   const handleToggleCamera = () => setCameraType((prev) => (prev === "front" ? "back" : "front"));
@@ -206,6 +359,16 @@ export default function FacialRecognitionRegister() {
       </ScrollView>
     );
   }
+
+  const scanLineTranslateY = scanAnimation.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, width * 0.6 - 4],
+  });
+
+  const borderColor = borderAnimation.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: ["#F4C542", "#4CAF50", "#F4C542"],
+  });
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
@@ -246,12 +409,62 @@ export default function FacialRecognitionRegister() {
         <TouchableOpacity style={styles.flipButton} onPress={handleToggleCamera}>
           <Ionicons name="camera-reverse-outline" size={24} color="#F4C542" />
         </TouchableOpacity>
-        <CameraView
-          ref={cameraRef}
-          style={styles.cameraFrame}
-          facing={cameraType}
-          ratio="4:3"
-        />
+        <View style={styles.cameraContainer}>
+          <Animated.View
+            style={[
+              styles.cameraWrapper,
+              {
+                transform: [{ scale: pulseAnimation }],
+              },
+            ]}
+          >
+            <Animated.View
+              style={[
+                styles.cameraFrame,
+                {
+                  borderColor: isScanning ? borderColor : "#F4C542",
+                }
+              ]}
+            >
+              <CameraView
+                ref={cameraRef}
+                style={styles.camera}
+                facing={cameraType}
+                ratio="4:3"
+              />
+
+              {/* Animação de linha de scanning */}
+              {isScanning && (
+                <Animated.View
+                  style={[
+                    styles.scanLine,
+                    {
+                      transform: [{ translateY: scanLineTranslateY }],
+                    },
+                  ]}
+                />
+              )}
+
+              {/* Cantos da moldura */}
+              <View style={[styles.corner, styles.topLeft]} />
+              <View style={[styles.corner, styles.topRight]} />
+              <View style={[styles.corner, styles.bottomLeft]} />
+              <View style={[styles.corner, styles.bottomRight]} />
+            </Animated.View>
+          </Animated.View>
+
+          {/* Status de scanning */}
+          {isScanning && (
+            <View style={styles.scanStatus}>
+              <View style={styles.scanStatusDots}>
+                <View style={[styles.dot, { backgroundColor: '#F4C542' }]} />
+                <View style={[styles.dot, { backgroundColor: '#F4C542', opacity: 0.7 }]} />
+                <View style={[styles.dot, { backgroundColor: '#F4C542', opacity: 0.4 }]} />
+              </View>
+              <Text style={styles.scanStatusText}>Analisando rosto...</Text>
+            </View>
+          )}
+        </View>
       </View>
 
       <View style={styles.instructionsContainer}>
@@ -287,6 +500,22 @@ export default function FacialRecognitionRegister() {
           </View>
         )}
       </View>
+
+      {/* Modal de Sucesso Personalizado */}
+      <CustomSuccessModal
+        visible={showSuccessModal}
+        onClose={handleCloseModal}
+        employeeData={userData}
+      />
+
+      {/* Modal de Erro Personalizado */}
+      <CustomSuccessModal
+        visible={showErrorModal}
+        onClose={handleCloseErrorModal}
+        employeeData={userData}
+        isError={true}
+        errorMessage={errorMessage}
+      />
     </ScrollView>
   );
 }
@@ -300,6 +529,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 16,
     paddingBottom: 24,
+    flexGrow: 1,
   },
   message: {
     color: "#FFFFFF",
@@ -384,13 +614,83 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 16,
   },
+  cameraContainer: {
+    position: "relative",
+    alignItems: "center",
+  },
+  cameraWrapper: {
+    position: "relative",
+  },
   cameraFrame: {
+    borderRadius: 16,
+    borderWidth: 3,
+    overflow: "hidden",
+    position: "relative",
+  },
+  camera: {
     width: width * 0.8,
     height: width * 0.6,
-    borderRadius: 16,
-    borderWidth: 2,
+  },
+  scanLine: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    height: 2,
+    backgroundColor: "#4CAF50",
+    shadowColor: "#4CAF50",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  corner: {
+    position: "absolute",
+    width: 20,
+    height: 20,
     borderColor: "#F4C542",
-    overflow: "hidden",
+  },
+  topLeft: {
+    top: 10,
+    left: 10,
+    borderTopWidth: 3,
+    borderLeftWidth: 3,
+  },
+  topRight: {
+    top: 10,
+    right: 10,
+    borderTopWidth: 3,
+    borderRightWidth: 3,
+  },
+  bottomLeft: {
+    bottom: 10,
+    left: 10,
+    borderBottomWidth: 3,
+    borderLeftWidth: 3,
+  },
+  bottomRight: {
+    bottom: 10,
+    right: 10,
+    borderBottomWidth: 3,
+    borderRightWidth: 3,
+  },
+  scanStatus: {
+    alignItems: "center",
+    marginTop: 12,
+  },
+  scanStatusDots: {
+    flexDirection: "row",
+    marginBottom: 8,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginHorizontal: 3,
+  },
+  scanStatusText: {
+    color: "#F4C542",
+    fontSize: 14,
+    fontWeight: "600",
   },
   flipButton: {
     alignSelf: "center",
@@ -445,5 +745,128 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     marginLeft: 8,
+  },
+  
+  
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 24,
+  },
+  modalContainer: {
+    backgroundColor: "#0A1F44E6", 
+    borderRadius: 20,
+    padding: 24,
+    width: "100%",
+    maxWidth: 350,
+    borderWidth: 2,
+    borderColor: "#F4C542",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 10,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  modalHeader: {
+    alignItems: "center",
+    marginBottom: 24,
+  },
+  successIcon: {
+    marginBottom: 12,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: "bold",
+    color: "#FFFFFF",
+    textAlign: "center",
+    marginBottom: 8,
+  },
+  modalSubtitle: {
+    fontSize: 16,
+    color: "#F4C542",
+    textAlign: "center",
+    fontWeight: "600",
+  },
+  modalContent: {
+    marginBottom: 24,
+  },
+  timeInfo: {
+    backgroundColor: "#142850",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#F4C542",
+  },
+  timeItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  timeText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "600",
+    marginLeft: 12,
+  },
+  employeeInfo: {
+    backgroundColor: "#142850",
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#F4C542",
+  },
+  employeeTitle: {
+    color: "#F4C542",
+    fontSize: 16,
+    fontWeight: "bold",
+    marginBottom: 12,
+    textAlign: "center",
+  },
+  employeeItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 10,
+    paddingVertical: 4,
+  },
+  employeeText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    marginLeft: 12,
+    flex: 1,
+  },
+  modalButton: {
+    backgroundColor: "#F4C542",
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    alignItems: "center",
+    shadowColor: "#F4C542",
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  modalButtonText: {
+    color: "#0A1F44",
+    fontSize: 18,
+    fontWeight: "bold",
+  },
+  errorSubtitle: {
+    color: "#F44336",
+  },
+  errorButton: {
+    backgroundColor: "#F44336",
+  },
+  errorButtonText: {
+    color: "#FFFFFF",
   },
 });

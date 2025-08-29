@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Dimensions, Linking, Animated } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Dimensions, Linking, Animated, Modal } from "react-native";
 import { CameraView, useCameraPermissions, CameraPictureOptions } from "expo-camera";
 import { ButtonLogin } from "../ButtonLogin";
 import { router } from "expo-router";
@@ -9,6 +9,110 @@ import api from "../../services/api";
 
 const { width } = Dimensions.get("window");
 
+interface EmployeeData {
+  nome?: string;
+  cpf?: string;
+  phone_number?: string;
+  funcao?: string;
+  matricula?: string;
+  empresa?: string;
+  date?: string;
+  last_records?: any[];
+}
+
+interface CustomSuccessModalProps {
+  visible: boolean;
+  onClose: () => void;
+  employeeData: EmployeeData | null;
+  clockInType: "entrada" | "saida" | "almoco" | null;
+  isError?: boolean;
+  errorMessage?: string;
+}
+
+const CustomSuccessModal: React.FC<CustomSuccessModalProps> = ({ 
+  visible, 
+  onClose, 
+  employeeData, 
+  clockInType, 
+  isError = false, 
+  errorMessage 
+}) => {
+  if (!visible) return null;
+
+  const typeText = clockInType === "entrada" ? "Entrada" : clockInType === "saida" ? "Saída" : "Almoço";
+  const currentTime = new Date().toLocaleTimeString("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+  const currentDate = new Date().toLocaleDateString("pt-BR");
+
+  return (
+    <Modal
+      transparent={true}
+      visible={visible}
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <View style={styles.successIcon}>
+              <Ionicons 
+                name={isError ? "close-circle" : "checkmark-circle"} 
+                size={40} 
+                color={isError ? "#F44336" : "#4CAF50"} 
+              />
+            </View>
+            <Text style={styles.modalTitle}>
+              {isError ? "Erro no Registro" : "Ponto Registrado"}
+            </Text>
+            <Text style={[styles.modalSubtitle, isError && styles.errorSubtitle]}>
+              {isError ? errorMessage || "Falha ao registrar ponto" : `${typeText} registrada com sucesso!`}
+            </Text>
+          </View>
+
+          {!isError && (
+            <View style={styles.modalContent}>
+              <View style={styles.timeInfo}>
+                <View style={styles.timeItem}>
+                  <Ionicons name="calendar-outline" size={16} color="#F4C542" />
+                  <Text style={styles.timeText}>{currentDate}</Text>
+                </View>
+                <View style={styles.timeItem}>
+                  <Ionicons name="time-outline" size={16} color="#F4C542" />
+                  <Text style={styles.timeText}>{currentTime}</Text>
+                </View>
+              </View>
+
+              <View style={styles.employeeInfo}>
+                <Text style={styles.employeeTitle}>Dados do Funcionário:</Text>
+                <View style={styles.employeeItem}>
+                  <Ionicons name="person-outline" size={16} color="#F4C542" />
+                  <Text style={styles.employeeText}>Nome: {employeeData?.nome || "N/A"}</Text>
+                </View>
+                <View style={styles.employeeItem}>
+                  <Ionicons name="card-outline" size={16} color="#F4C542" />
+                  <Text style={styles.employeeText}>CPF: {employeeData?.cpf || "N/A"}</Text>
+                </View>
+              </View>
+            </View>
+          )}
+
+          <TouchableOpacity 
+            style={[styles.modalButton, isError && styles.errorButton]} 
+            onPress={onClose}
+          >
+            <Text style={[styles.modalButtonText, isError && styles.errorButtonText]}>
+              {isError ? "Tentar Novamente" : "OK"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
 export default function FacialRecognitionClockIn() {
   const cameraRef = useRef<CameraView>(null);
   const [permission, requestPermission] = useCameraPermissions();
@@ -16,10 +120,13 @@ export default function FacialRecognitionClockIn() {
   const [scanProgress, setScanProgress] = useState(0);
   const [clockInType, setClockInType] = useState<"entrada" | "saida" | "almoco" | null>(null);
   const [faceDetected, setFaceDetected] = useState(false);
-  const [employeeData, setEmployeeData] = useState<any>(null);
+  const [employeeData, setEmployeeData] = useState<EmployeeData | null>(null);
   const [cameraType, setCameraType] = useState<"front" | "back">("front");
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string>("");
 
-  // Animações para o reconhecimento facial
+
   const scanAnimation = useRef(new Animated.Value(0)).current;
   const pulseAnimation = useRef(new Animated.Value(1)).current;
   const borderAnimation = useRef(new Animated.Value(0)).current;
@@ -28,7 +135,7 @@ export default function FacialRecognitionClockIn() {
     if (!permission) requestPermission();
   }, [permission]);
 
-  // Animação de scanning quando está processando
+
   useEffect(() => {
     if (isScanning) {
       startScanAnimation();
@@ -127,28 +234,19 @@ export default function FacialRecognitionClockIn() {
       setEmployeeData({
         nome: response.data.full_name,
         cpf: response.data.cpf,
-        funcao: response.data.funcao,
-        matricula: response.data.matricula,
-        empresa: response.data.empresa,
-        date: response.data.date,
-        last_records: response.data.last_records,
+        phone_number: response.data.phone_number,
       });
 
       handleScanComplete(type);
     } catch (error) {
       if (axios.isAxiosError(error)) {
         console.error("Erro ao registrar ponto:", error.response?.data || error.message);
-        Alert.alert("Erro", error.response?.data?.error || "Falha ao registrar ponto.");
-        setEmployeeData({
-          nome: "Erro no Registro",
-          cpf: "N/A",
-          funcao: "N/A",
-          matricula: "",
-          empresa: "",
-        });
+        setErrorMessage(error.response?.data?.error || "Falha ao registrar ponto");
+        setShowErrorModal(true);
       } else {
         console.error("Erro desconhecido:", error);
-        Alert.alert("Erro", "Erro inesperado ao registrar ponto.");
+        setErrorMessage("Erro inesperado ao registrar ponto");
+        setShowErrorModal(true);
       }
     } finally {
       setIsScanning(false);
@@ -166,20 +264,16 @@ export default function FacialRecognitionClockIn() {
   };
 
   const handleScanComplete = (type: "entrada" | "saida" | "almoco") => {
-    const currentTime = new Date().toLocaleTimeString("pt-BR", {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    });
-    const currentDate = new Date().toLocaleDateString("pt-BR");
+    setShowSuccessModal(true);
+  };
 
-    const typeText = type === "entrada" ? "Entrada" : type === "saida" ? "Saída" : "Almoço";
+  const handleCloseModal = () => {
+    setShowSuccessModal(false);
+  };
 
-    Alert.alert(
-      "Ponto Registrado",
-      `${typeText} registrada com sucesso!\n\nData: ${currentDate}\nHorário: ${currentTime}`,
-      [{ text: "OK", onPress: () => router.replace("/manager/home") }]
-    );
+  const handleCloseErrorModal = () => {
+    setShowErrorModal(false);
+    setErrorMessage("");
   };
 
   const handleBackToHome = () => router.back();
@@ -232,23 +326,8 @@ export default function FacialRecognitionClockIn() {
             <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
             <Text style={styles.faceDetectedText}>Rosto Detectado</Text>
           </View>
-          <Text style={styles.userInfoTitle}>Dados do Funcionário:</Text>
-          <Text style={styles.userInfoText}>Nome: {employeeData.nome}</Text>
-          <Text style={styles.userInfoText}>CPF: {employeeData.cpf}</Text>
-          <Text style={styles.userInfoText}>Função: {employeeData.funcao}</Text>
-          <Text style={styles.userInfoText}>Matrícula: {employeeData.matricula}</Text>
-          <Text style={styles.userInfoText}>Empresa: {employeeData.empresa}</Text>
-          <Text style={styles.userInfoText}>Data: {employeeData.date}</Text>
-          {employeeData.last_records && employeeData.last_records.length > 0 && (
-            <View>
-              <Text style={styles.userInfoTitle}>Últimos Registros:</Text>
-              {employeeData.last_records.map((record: any, index: number) => (
-                <Text key={index} style={styles.userInfoText}>
-                  {record.point_type} - {new Date(record.data_hora).toLocaleString("pt-BR")}
-                </Text>
-              ))}
-            </View>
-          )}
+          <Text style={styles.userInfoTitle}>Funcionário Reconhecido</Text>
+          <Text style={styles.userInfoText}>Ponto registrado com sucesso!</Text>
         </View>
       ) : (
         <View style={styles.userInfoContainer}>
@@ -380,6 +459,24 @@ export default function FacialRecognitionClockIn() {
           </View>
         )}
       </View>
+
+      {/* Modal de Sucesso Personalizado */}
+      <CustomSuccessModal
+        visible={showSuccessModal}
+        onClose={handleCloseModal}
+        employeeData={employeeData}
+        clockInType={clockInType}
+      />
+
+      {/* Modal de Erro Personalizado */}
+      <CustomSuccessModal
+        visible={showErrorModal}
+        onClose={handleCloseErrorModal}
+        employeeData={null}
+        clockInType={clockInType}
+        isError={true}
+        errorMessage={errorMessage}
+      />
     </View>
   );
 }
@@ -634,5 +731,127 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     marginLeft: 8,
+  },
+  
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 24,
+  },
+  modalContainer: {
+    backgroundColor: "#0A1F44E6", 
+    borderRadius: 20,
+    padding: 24,
+    width: "100%",
+    maxWidth: 350,
+    borderWidth: 2,
+    borderColor: "#F4C542",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 10,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  modalHeader: {
+    alignItems: "center",
+    marginBottom: 24,
+  },
+  successIcon: {
+    marginBottom: 12,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: "bold",
+    color: "#FFFFFF",
+    textAlign: "center",
+    marginBottom: 8,
+  },
+  modalSubtitle: {
+    fontSize: 16,
+    color: "#F4C542",
+    textAlign: "center",
+    fontWeight: "600",
+  },
+  modalContent: {
+    marginBottom: 24,
+  },
+  timeInfo: {
+    backgroundColor: "#142850",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#F4C542",
+  },
+  timeItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  timeText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "600",
+    marginLeft: 12,
+  },
+  employeeInfo: {
+    backgroundColor: "#142850",
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#F4C542",
+  },
+  employeeTitle: {
+    color: "#F4C542",
+    fontSize: 16,
+    fontWeight: "bold",
+    marginBottom: 12,
+    textAlign: "center",
+  },
+  employeeItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 10,
+    paddingVertical: 4,
+  },
+  employeeText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    marginLeft: 12,
+    flex: 1,
+  },
+  modalButton: {
+    backgroundColor: "#F4C542",
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    alignItems: "center",
+    shadowColor: "#F4C542",
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  modalButtonText: {
+    color: "#0A1F44",
+    fontSize: 18,
+    fontWeight: "bold",
+  },
+  errorSubtitle: {
+    color: "#F44336",
+  },
+  errorButton: {
+    backgroundColor: "#F44336",
+  },
+  errorButtonText: {
+    color: "#FFFFFF",
   },
 });
