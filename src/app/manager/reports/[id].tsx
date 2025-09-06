@@ -1,5 +1,18 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, Dimensions, ActivityIndicator, Alert, Platform } from "react-native";
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  TouchableOpacity, 
+  SafeAreaView, 
+  ScrollView, 
+  Dimensions, 
+  ActivityIndicator, 
+  Alert, 
+  Platform,
+  Modal,
+  FlatList
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, router } from "expo-router";
 import api from "@/services/api";
@@ -26,6 +39,84 @@ export default function ReportIndividualScreen() {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [justifications, setJustifications] = useState<any[]>([]);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [justificationsLoading, setJustificationsLoading] = useState(false);
+
+  const fetchUserJustifications = async () => {
+    try {
+      setJustificationsLoading(true);
+      console.log(`Buscando justificativas para usuário ${userId} (${name})`);
+      const response = await api.get("/justification/");
+      
+      if (response.status === 200) {
+        const allJustifications = response.data;
+        // Filtrar justificativas do usuário específico
+        const userJustifications = allJustifications.filter((item: any) => 
+          item.user === name || item.employee === name || item.user_id === userId ||
+          (item.user && item.user.toString() === name.toString()) ||
+          (item.employee && item.employee.toString() === name.toString())
+        );
+        
+        const formattedJustifications = userJustifications.map((item: any) => ({
+          id: item.id ? item.id.toString() : "N/A",
+          reason: item.reason || "Sem motivo",
+          date: item.date || (item.created_at ? item.created_at.split("T")[0] : "N/A"),
+          status: mapJustificationStatus(item),
+          details: item.reason || item.details || "Sem detalhes",
+        }));
+        
+        setJustifications(formattedJustifications);
+        console.log("Justificativas do usuário:", formattedJustifications);
+      }
+    } catch (error) {
+      console.error("Erro ao buscar justificativas:", error);
+      Alert.alert("Erro", "Não foi possível carregar as justificativas.");
+    } finally {
+      setJustificationsLoading(false);
+    }
+  };
+
+  const mapJustificationStatus = (item: any) => {
+    if (item.status === 'aprovada' || item.status === 'approved') {
+      return "aprovada";
+    } else if (item.status === 'recusada' || item.status === 'rejected') {
+      return "recusada";
+    } else if (item.approval === true || item.approved === true) {
+      return "aprovada";
+    } else if (item.approval === false || item.approved === false) {
+      return "recusada";
+    } else {
+      return "pendente";
+    }
+  };
+
+  const openJustificationsModal = () => {
+    fetchUserJustifications();
+    setModalVisible(true);
+  };
+
+  const closeModal = () => {
+    setModalVisible(false);
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "aprovada": return "#4BB543";
+      case "recusada": return "#FF6B6B";
+      case "pendente": return "#F4C542";
+      default: return "#B0B3C7";
+    }
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case "aprovada": return "checkmark-circle";
+      case "recusada": return "close-circle";
+      case "pendente": return "time-outline";
+      default: return "help-circle-outline";
+    }
+  };
 
   useEffect(() => {
     const fetchUserAttendance = async () => {
@@ -84,16 +175,6 @@ export default function ReportIndividualScreen() {
           };
           setStats(updatedStats);
           console.log('Stats atualizadas:', updatedStats);
-          
-          console.log(`📊 Estatísticas CUMULATIVAS (desde primeiro ponto):`);
-          console.log(`   ⏰ ${updatedStats.horas_trabalhadas_total}h trabalhadas no total`);
-          console.log(`   ❌ ${updatedStats.total_faltas} faltas acumuladas`);
-          console.log(`   ⚠️ ${updatedStats.total_atrasos} atrasos (após 07:00)`);
-          console.log(`   📄 ${updatedStats.total_justificativas} justificativas`);
-          
-          if (updatedStats.total_atrasos > 0) {
-            console.log(`⚠️ ${updatedStats.total_atrasos} atraso(s) detectado(s) (entrada após 07:00)`);
-          }
         } else {
           console.warn('Stats não encontradas na resposta, usando valores padrão');
           setStats({ horas_trabalhadas_total: 0, total_faltas: 0, total_atrasos: 0, total_justificativas: 0 });
@@ -125,44 +206,6 @@ export default function ReportIndividualScreen() {
       setLoading(false);
     }
   }, [userId, period, startDate, endDate]);
-
-  if (loading) {
-    return (
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#F4C542" />
-          <Text style={styles.loadingText}>Carregando dados...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (error) {
-    return (
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <Ionicons name="arrow-back" size={24} color="#F4C542" />
-          </TouchableOpacity>
-          <Text style={styles.header}>Erro</Text>
-          <View style={{ width: 40 }} />
-        </View>
-        <View style={styles.loadingContainer}>
-          <Ionicons name="alert-circle-outline" size={48} color="#FF6B6B" />
-          <Text style={styles.emptyText}>{error}</Text>
-          <TouchableOpacity 
-            style={styles.retryBtn} 
-            onPress={() => {
-              setError(null);
-              setLoading(true);
-            }}
-          >
-            <Text style={styles.retryBtnText}>Tentar Novamente</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
-  }
 
   const generatePdf = async () => {
     setLoading(true);
@@ -509,6 +552,44 @@ export default function ReportIndividualScreen() {
     }
   };
 
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#F4C542" />
+          <Text style={styles.loadingText}>Carregando dados...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (error) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.headerRow}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+            <Ionicons name="arrow-back" size={24} color="#F4C542" />
+          </TouchableOpacity>
+          <Text style={styles.header}>Erro</Text>
+          <View style={{ width: 40 }} />
+        </View>
+        <View style={styles.loadingContainer}>
+          <Ionicons name="alert-circle-outline" size={48} color="#FF6B6B" />
+          <Text style={styles.emptyText}>{error}</Text>
+          <TouchableOpacity 
+            style={styles.retryBtn} 
+            onPress={() => {
+              setError(null);
+              setLoading(true);
+            }}
+          >
+            <Text style={styles.retryBtnText}>Tentar Novamente</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.headerRow}>
@@ -548,6 +629,8 @@ export default function ReportIndividualScreen() {
           color="#2196F3" 
           icon="document-text-outline" 
           subtitle="total enviadas"
+          onPress={openJustificationsModal}
+          isClickable={true}
         />
       </View>
       
@@ -598,6 +681,60 @@ export default function ReportIndividualScreen() {
         <DownloadBtn label="Gerar PDF" icon="document-outline" color="#F4C542" onPress={generatePdf} />
         <DownloadBtn label="Gerar Excel" icon="grid-outline" color="#4CAF50" onPress={generateCsv} />
       </View>
+
+      {/* Modal de Justificativas */}
+      <Modal
+        visible={modalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={closeModal}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Justificativas de {name}</Text>
+              <TouchableOpacity onPress={closeModal}>
+                <Ionicons name="close" size={24} color="#B0B3C7" />
+              </TouchableOpacity>
+            </View>
+
+            {justificationsLoading ? (
+              <View style={styles.modalLoading}>
+                <ActivityIndicator size="large" color="#F4C542" />
+                <Text style={styles.modalLoadingText}>Carregando justificativas...</Text>
+              </View>
+            ) : (
+              <FlatList
+                data={justifications}
+                keyExtractor={(item) => item.id}
+                renderItem={({ item }) => (
+                  <View style={styles.justificationItem}>
+                    <View style={styles.justificationHeader}>
+                      <Text style={styles.justificationDate}>{item.date}</Text>
+                      <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
+                        <Ionicons name={getStatusIcon(item.status)} size={12} color="#333" />
+                        <Text style={styles.statusText}>
+                          {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={styles.justificationReason}>{item.reason}</Text>
+                  </View>
+                )}
+                style={styles.justificationsList}
+                ListEmptyComponent={
+                  <View style={styles.emptyJustifications}>
+                    <Ionicons name="document-text-outline" size={48} color="#B0B3C7" />
+                    <Text style={styles.emptyJustificationsText}>
+                      Nenhuma justificativa encontrada
+                    </Text>
+                  </View>
+                }
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -609,13 +746,22 @@ type SummaryCardProps = {
   icon: any; 
   suffix?: string; 
   subtitle?: string;
+  onPress?: () => void;
+  isClickable?: boolean;
 };
-function SummaryCard({ label, value, color, icon, suffix = "", subtitle }: SummaryCardProps) {
+
+function SummaryCard({ label, value, color, icon, suffix = "", subtitle, onPress, isClickable = false }: SummaryCardProps) {
   const displayValue = typeof value === 'number' ? value : 0;
   const formattedValue = label === "Horas" ? displayValue.toFixed(1) : displayValue.toString();
   
+  const CardComponent = isClickable ? TouchableOpacity : View;
+  
   return (
-    <View style={[styles.summaryCard, { borderColor: color }]}>
+    <CardComponent 
+      style={[styles.summaryCard, { borderColor: color }, isClickable && styles.clickableCard]} 
+      onPress={onPress}
+      activeOpacity={isClickable ? 0.7 : 1}
+    >
       <Ionicons name={icon} size={22} color={color} style={{ marginBottom: 4 }} />
       <Text style={styles.summaryValue}>
         {formattedValue}{suffix}
@@ -624,7 +770,10 @@ function SummaryCard({ label, value, color, icon, suffix = "", subtitle }: Summa
       {subtitle && (
         <Text style={styles.summarySubtitle}>{subtitle}</Text>
       )}
-    </View>
+      {isClickable && (
+        <Ionicons name="chevron-forward" size={16} color="#B0B3C7" style={{ marginTop: 4 }} />
+      )}
+    </CardComponent>
   );
 }
 
@@ -688,6 +837,12 @@ const styles = StyleSheet.create({
     maxWidth: 85,
     backgroundColor: "#142850",
     minHeight: 95,
+  },
+  clickableCard: {
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   summaryValue: {
     color: "#F4C542",
@@ -842,21 +997,92 @@ const styles = StyleSheet.create({
   backBtn: {
     padding: 8,
   },
-  statusBadge: {
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 70,
-    alignSelf: 'center',
-  },
-  statusBadgeText: {
-    fontWeight: 'bold',
-    fontSize: 13,
-    textAlign: 'center',
-  },
   contentContainer: {
     flexGrow: 1,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalContent: {
+    backgroundColor: "#142850",
+    borderRadius: 16,
+    padding: 20,
+    width: "90%",
+    maxWidth: 400,
+    maxHeight: "80%",
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  modalTitle: {
+    color: "#F4C542",
+    fontSize: 18,
+    fontWeight: "bold",
+    flex: 1,
+  },
+  modalLoading: {
+    alignItems: "center",
+    paddingVertical: 40,
+  },
+  modalLoadingText: {
+    color: "#B0B3C7",
+    fontSize: 16,
+    marginTop: 12,
+  },
+  justificationsList: {
+    maxHeight: 400,
+  },
+  justificationItem: {
+    backgroundColor: "#1A2A4F",
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+  },
+  justificationHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  justificationDate: {
+    color: "#B0B3C7",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  statusBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    gap: 4,
+    minWidth: 80,
+    justifyContent: "center",
+  },
+  statusText: {
+    color: "#333",
+    fontSize: 11,
+    fontWeight: "bold",
+  },
+  justificationReason: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    lineHeight: 18,
+  },
+  emptyJustifications: {
+    alignItems: "center",
+    paddingVertical: 40,
+  },
+  emptyJustificationsText: {
+    color: "#B0B3C7",
+    fontSize: 16,
+    textAlign: "center",
+    marginTop: 12,
   },
 });
