@@ -43,6 +43,50 @@ export default function ReportIndividualScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [justificationsLoading, setJustificationsLoading] = useState(false);
 
+  // Função para obter o intervalo de datas baseado no período atual
+  const getCurrentPeriodDates = () => {
+    const today = new Date();
+    let start: Date, end: Date;
+
+    if (startDate && endDate) {
+      return { start: startDate, end: endDate };
+    }
+
+    switch (period) {
+      case "hoje":
+        start = new Date(today);
+        end = new Date(today);
+        break;
+      case "semana":
+        const dayOfWeek = today.getDay();
+        start = new Date(today);
+        start.setDate(today.getDate() - dayOfWeek);
+        end = new Date(today);
+        end.setDate(today.getDate() + (6 - dayOfWeek));
+        break;
+      case "mes":
+        start = new Date(today.getFullYear(), today.getMonth(), 1);
+        end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+        break;
+      case "ano":
+        start = new Date(today.getFullYear(), 0, 1);
+        end = new Date(today.getFullYear(), 11, 31);
+        break;
+      default:
+        start = new Date(today.getFullYear(), today.getMonth(), 1);
+        end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    }
+
+    const formatDate = (date: Date) => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
+    return { start: formatDate(start), end: formatDate(end) };
+  };
+
   const fetchUserJustifications = async () => {
     try {
       setJustificationsLoading(true);
@@ -51,14 +95,25 @@ export default function ReportIndividualScreen() {
       
       if (response.status === 200) {
         const allJustifications = response.data;
+        
         // Filtrar justificativas do usuário específico
         const userJustifications = allJustifications.filter((item: any) => 
           item.user === name || item.employee === name || item.user_id === userId ||
           (item.user && item.user.toString() === name.toString()) ||
           (item.employee && item.employee.toString() === name.toString())
         );
+
+        // Filtrar por período se necessário
+        const { start, end } = getCurrentPeriodDates();
         
-        const formattedJustifications = userJustifications.map((item: any) => ({
+        const filteredJustifications = userJustifications.filter((item: any) => {
+          const itemDate = item.date || (item.created_at ? item.created_at.split("T")[0] : null);
+          if (!itemDate) return false;
+          
+          return itemDate >= start && itemDate <= end;
+        });
+        
+        const formattedJustifications = filteredJustifications.map((item: any) => ({
           id: item.id ? item.id.toString() : "N/A",
           reason: item.reason || "Sem motivo",
           date: item.date || (item.created_at ? item.created_at.split("T")[0] : "N/A"),
@@ -67,7 +122,7 @@ export default function ReportIndividualScreen() {
         }));
         
         setJustifications(formattedJustifications);
-        console.log("Justificativas do usuário:", formattedJustifications);
+        console.log("Justificativas filtradas do usuário:", formattedJustifications);
       }
     } catch (error) {
       console.error("Erro ao buscar justificativas:", error);
@@ -592,95 +647,97 @@ export default function ReportIndividualScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.headerRow}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color="#F4C542" />
-        </TouchableOpacity>
-        <Text style={styles.header}>{name}</Text>
-        <View style={{ width: 40 }} />
-      </View>
-      
-      <View style={styles.summaryRow}>
-        <SummaryCard 
-          label="Horas" 
-          value={stats.horas_trabalhadas_total || 0} 
-          color="#4CAF50" 
-          icon="time-outline" 
-          suffix="h"
-          subtitle="total acumulado"
-        />
-        <SummaryCard 
-          label="Faltas" 
-          value={stats.total_faltas || 0} 
-          color="#FF6B6B" 
-          icon="close-circle-outline" 
-          subtitle="total geral"
-        />
-        <SummaryCard 
-          label="Atrasos" 
-          value={stats.total_atrasos || 0} 
-          color="#FF9800" 
-          icon="alert-circle-outline" 
-          subtitle="após 07:00"
-        />
-        <SummaryCard 
-          label="Justificativas" 
-          value={stats.total_justificativas || 0} 
-          color="#2196F3" 
-          icon="document-text-outline" 
-          subtitle="total enviadas"
-          onPress={openJustificationsModal}
-          isClickable={true}
-        />
-      </View>
-      
-      <View style={styles.filtersSection}>
-        <Text style={styles.filterLabel}>Filtrar visualização da tabela:</Text>
-        <View style={styles.filterRow}>
-          <FilterBtn label="Hoje" active={period === "hoje" && !startDate} onPress={() => { setPeriod("hoje"); setStartDate(null); setEndDate(null); }} />
-          <FilterBtn label="Semana" active={period === "semana" && !startDate} onPress={() => { setPeriod("semana"); setStartDate(null); setEndDate(null); }} />
-          <FilterBtn label="Mês" active={period === "mes" && !startDate} onPress={() => { setPeriod("mes"); setStartDate(null); setEndDate(null); }} />
-          <FilterBtn label="Ano" active={period === "ano" && !startDate} onPress={() => { setPeriod("ano"); setStartDate(null); setEndDate(null); }} />
+      <ScrollView showsVerticalScrollIndicator={true} style={styles.scrollContainer}>
+        <View style={styles.headerRow}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+            <Ionicons name="arrow-back" size={24} color="#F4C542" />
+          </TouchableOpacity>
+          <Text style={styles.header}>{name}</Text>
+          <View style={{ width: 40 }} />
         </View>
-      </View>
-      
-      {attendances && attendances.length > 0 ? (
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={true} 
-          style={{ marginHorizontal: 12, marginTop: 10 }} 
-          contentContainerStyle={styles.contentContainer}
-        >
-          <View style={styles.tableSection}>
-            <View style={styles.tableHeader}>
-              <Text style={[styles.tableCell, { minWidth: 100 }]}>Data</Text>
-              <Text style={[styles.tableCell, { minWidth: 90 }]}>Entrada</Text>
-              <Text style={[styles.tableCell, { minWidth: 110 }]}>Almoço</Text>
-              <Text style={[styles.tableCell, { minWidth: 90 }]}>Saída</Text>
-            </View>
-            {attendances.map((r, idx) => (
-              <View key={r.id || idx} style={[styles.tableRow, idx % 2 === 0 && styles.tableRowAlt]}>
-                <Text style={[styles.tableCell, { minWidth: 100 }]}>{r.date || '—'}</Text>
-                <Text style={[styles.tableCell, { minWidth: 90 }]}>{r.entrada || '—'}</Text>
-                <Text style={[styles.tableCell, { minWidth: 110 }]}>{r.entrada_almoco || '—'}</Text>
-                <Text style={[styles.tableCell, { minWidth: 90 }]}>{r.saida || '—'}</Text>
-              </View>
-            ))}
+        
+        <View style={styles.summaryRow}>
+          <SummaryCard 
+            label="Horas" 
+            value={stats.horas_trabalhadas_total || 0} 
+            color="#4CAF50" 
+            icon="time-outline" 
+            suffix="h"
+            subtitle="total acumulado"
+          />
+          <SummaryCard 
+            label="Faltas" 
+            value={stats.total_faltas || 0} 
+            color="#FF6B6B" 
+            icon="close-circle-outline" 
+            subtitle="total geral"
+          />
+          <SummaryCard 
+            label="Atrasos" 
+            value={stats.total_atrasos || 0} 
+            color="#FF9800" 
+            icon="alert-circle-outline" 
+            subtitle="após 07:00"
+          />
+          <SummaryCard 
+            label="Justificativa" 
+            value={stats.total_justificativas || 0} 
+            color="#2196F3" 
+            icon="document-text-outline" 
+            subtitle="total enviadas"
+            onPress={openJustificationsModal}
+            isClickable={true}
+          />
+        </View>
+        
+        <View style={styles.filtersSection}>
+          <Text style={styles.filterLabel}>Filtrar visualização da tabela:</Text>
+          <View style={styles.filterRow}>
+            <FilterBtn label="Hoje" active={period === "hoje" && !startDate} onPress={() => { setPeriod("hoje"); setStartDate(null); setEndDate(null); }} />
+            <FilterBtn label="Semana" active={period === "semana" && !startDate} onPress={() => { setPeriod("semana"); setStartDate(null); setEndDate(null); }} />
+            <FilterBtn label="Mês" active={period === "mes" && !startDate} onPress={() => { setPeriod("mes"); setStartDate(null); setEndDate(null); }} />
+            <FilterBtn label="Ano" active={period === "ano" && !startDate} onPress={() => { setPeriod("ano"); setStartDate(null); setEndDate(null); }} />
           </View>
-        </ScrollView>
-      ) : (
-        <View style={styles.emptyContainer}>
-          <Ionicons name="calendar-outline" size={48} color="#B0B3C7" />
-          <Text style={styles.emptyText}>
-            Nenhum registro encontrado para o período selecionado
-          </Text>
         </View>
-      )}
-      
-      <View style={styles.downloadSection}>
-        <DownloadBtn label="Gerar PDF" icon="document-outline" color="#F4C542" onPress={generatePdf} />
-        <DownloadBtn label="Gerar Excel" icon="grid-outline" color="#4CAF50" onPress={generateCsv} />
-      </View>
+        
+        {attendances && attendances.length > 0 ? (
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={true} 
+            style={{ marginHorizontal: 12, marginTop: 10 }} 
+            contentContainerStyle={styles.contentContainer}
+          >
+            <View style={styles.tableSection}>
+              <View style={styles.tableHeader}>
+                <Text style={[styles.tableCell, { minWidth: 100 }]}>Data</Text>
+                <Text style={[styles.tableCell, { minWidth: 90 }]}>Entrada</Text>
+                <Text style={[styles.tableCell, { minWidth: 110 }]}>Almoço</Text>
+                <Text style={[styles.tableCell, { minWidth: 90 }]}>Saída</Text>
+              </View>
+              {attendances.map((r, idx) => (
+                <View key={r.id || idx} style={[styles.tableRow, idx % 2 === 0 && styles.tableRowAlt]}>
+                  <Text style={[styles.tableCell, { minWidth: 100 }]}>{r.date || '—'}</Text>
+                  <Text style={[styles.tableCell, { minWidth: 90 }]}>{r.entrada || '—'}</Text>
+                  <Text style={[styles.tableCell, { minWidth: 110 }]}>{r.entrada_almoco || '—'}</Text>
+                  <Text style={[styles.tableCell, { minWidth: 90 }]}>{r.saida || '—'}</Text>
+                </View>
+              ))}
+            </View>
+          </ScrollView>
+        ) : (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="calendar-outline" size={48} color="#B0B3C7" />
+            <Text style={styles.emptyText}>
+              Nenhum registro encontrado para o período selecionado
+            </Text>
+          </View>
+        )}
+        
+        <View style={styles.downloadSection}>
+          <DownloadBtn label="Gerar PDF" icon="document-outline" color="#F4C542" onPress={generatePdf} />
+          <DownloadBtn label="Gerar Excel" icon="grid-outline" color="#4CAF50" onPress={generateCsv} />
+        </View>
+      </ScrollView>
 
       {/* Modal de Justificativas */}
       <Modal
@@ -726,7 +783,7 @@ export default function ReportIndividualScreen() {
                   <View style={styles.emptyJustifications}>
                     <Ionicons name="document-text-outline" size={48} color="#B0B3C7" />
                     <Text style={styles.emptyJustificationsText}>
-                      Nenhuma justificativa encontrada
+                      Nenhuma justificativa encontrada para o período selecionado
                     </Text>
                   </View>
                 }
@@ -804,6 +861,9 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: "#0A1F44",
+  },
+  scrollContainer: {
+    flex: 1,
   },
   headerRow: {
     flexDirection: "row",
@@ -941,6 +1001,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 16,
     marginVertical: 16,
+    paddingBottom: 20,
   },
   downloadBtn: {
     flexDirection: "row",
@@ -981,6 +1042,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: 32,
+    minHeight: 200,
   },
   retryBtn: {
     backgroundColor: "#F4C542",
