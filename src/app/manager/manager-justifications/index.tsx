@@ -38,7 +38,7 @@ interface EmployeeSummary {
 
 const STATUS_COLORS: Record<Status, string> = {
   pendente: "#F4C542",
-  aprovada: "#4BB543",
+  aprovada: "#4BB543", 
   recusada: "#FF6B6B",
 };
 
@@ -60,7 +60,7 @@ export default function ManagerJustificationsScreen() {
   const [employeeSummaries, setEmployeeSummaries] = useState<EmployeeSummary[]>([]);
   const [selectedEmployee, setSelectedEmployee] = useState<EmployeeSummary | null>(null);
   const [selectedJustification, setSelectedJustification] = useState<Justification | null>(null);
-  const [employeeModalVisible, setEmployeeModalVisible] = useState(false);
+  const [justificationsModalVisible, setJustificationsModalVisible] = useState(false);
   const [justificationModalVisible, setJustificationModalVisible] = useState(false);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -236,9 +236,9 @@ export default function ManagerJustificationsScreen() {
     }
   };
 
-  const openEmployeeDetails = (employee: EmployeeSummary) => {
+  const openJustificationsModal = (employee: EmployeeSummary) => {
     setSelectedEmployee(employee);
-    setEmployeeModalVisible(true);
+    setJustificationsModalVisible(true);
   };
 
   const openJustificationDetails = (justification: Justification) => {
@@ -246,8 +246,8 @@ export default function ManagerJustificationsScreen() {
     setJustificationModalVisible(true);
   };
 
-  const closeEmployeeModal = () => {
-    setEmployeeModalVisible(false);
+  const closeJustificationsModal = () => {
+    setJustificationsModalVisible(false);
     setSelectedEmployee(null);
   };
 
@@ -256,68 +256,48 @@ export default function ManagerJustificationsScreen() {
     setSelectedJustification(null);
   };
 
-  // Componente da Legenda
-  const StatusLegend = () => (
-    <View style={styles.legendContainer}>
-      <Text style={styles.legendTitle}>Legenda dos Status:</Text>
-      <View style={styles.legendItems}>
-        <View style={styles.legendItem}>
-          <View style={[styles.legendDot, { backgroundColor: STATUS_COLORS.pendente }]} />
-          <Text style={styles.legendText}>Pendente</Text>
-        </View>
-        <View style={styles.legendItem}>
-          <View style={[styles.legendDot, { backgroundColor: STATUS_COLORS.aprovada }]} />
-          <Text style={styles.legendText}>Aprovada</Text>
-        </View>
-        <View style={styles.legendItem}>
-          <View style={[styles.legendDot, { backgroundColor: STATUS_COLORS.recusada }]} />
-          <Text style={styles.legendText}>Rejeitada</Text>
-        </View>
-      </View>
-    </View>
-  );
-
   const renderEmployeeItem = ({ item }: { item: EmployeeSummary }) => (
-    <TouchableOpacity style={styles.employeeCard} onPress={() => openEmployeeDetails(item)}>
+    <View style={styles.employeeCard}>
       <View style={styles.employeeHeader}>
         <View style={styles.employeeInfo}>
           <Text style={styles.employeeName}>{item.employee}</Text>
           <Text style={styles.employeeSubtitle}>
             {item.totalJustifications} justificativa{item.totalJustifications !== 1 ? 's' : ''}
           </Text>
+          <Text style={styles.lastDate}>Última: {item.lastJustificationDate}</Text>
         </View>
         
         {item.pendingCount > 0 && (
           <View style={styles.pendingBadge}>
-            <Ionicons name="time-outline" size={12} color="#0A1F44" />
             <Text style={styles.pendingBadgeText}>{item.pendingCount}</Text>
+            <Text style={styles.pendingBadgeLabel}>Pendente{item.pendingCount !== 1 ? 's' : ''}</Text>
           </View>
         )}
       </View>
 
       <View style={styles.statusSummary}>
         <View style={styles.statusItem}>
-          <View style={[styles.statusDot, { backgroundColor: STATUS_COLORS.pendente }]} />
-          <Text style={styles.statusCount}>{item.pendingCount}</Text>
+          <Text style={[styles.statusCount, { color: STATUS_COLORS.pendente }]}>{item.pendingCount}</Text>
           <Text style={styles.statusLabel}>Pendente{item.pendingCount !== 1 ? 's' : ''}</Text>
         </View>
         <View style={styles.statusItem}>
-          <View style={[styles.statusDot, { backgroundColor: STATUS_COLORS.aprovada }]} />
-          <Text style={styles.statusCount}>{item.approvedCount}</Text>
+          <Text style={[styles.statusCount, { color: STATUS_COLORS.aprovada }]}>{item.approvedCount}</Text>
           <Text style={styles.statusLabel}>Aprovada{item.approvedCount !== 1 ? 's' : ''}</Text>
         </View>
         <View style={styles.statusItem}>
-          <View style={[styles.statusDot, { backgroundColor: STATUS_COLORS.recusada }]} />
-          <Text style={styles.statusCount}>{item.rejectedCount}</Text>
+          <Text style={[styles.statusCount, { color: STATUS_COLORS.recusada }]}>{item.rejectedCount}</Text>
           <Text style={styles.statusLabel}>Rejeitada{item.rejectedCount !== 1 ? 's' : ''}</Text>
         </View>
       </View>
 
-      <View style={styles.lastDateContainer}>
-        <Ionicons name="time-outline" size={14} color="#B0B3C7" />
-        <Text style={styles.lastDate}>Última justificativa: {item.lastJustificationDate}</Text>
-      </View>
-    </TouchableOpacity>
+      <TouchableOpacity 
+        style={styles.viewJustificationsButton} 
+        onPress={() => openJustificationsModal(item)}
+      >
+        <Ionicons name="eye-outline" size={18} color="#0A1F44" />
+        <Text style={styles.viewJustificationsButtonText}>Ver Justificativas</Text>
+      </TouchableOpacity>
+    </View>
   );
 
   const renderJustificationItem = ({ item }: { item: Justification }) => (
@@ -325,7 +305,6 @@ export default function ManagerJustificationsScreen() {
       <View style={styles.justificationHeader}>
         <Text style={styles.justificationReason} numberOfLines={2}>{item.reason}</Text>
         <View style={[styles.statusBadge, { backgroundColor: STATUS_COLORS[item.status] }]}>
-          <Ionicons name={STATUS_ICONS[item.status] as any} size={12} color="#333" />
           <Text style={styles.statusBadgeText}>{STATUS_LABELS[item.status]}</Text>
         </View>
       </View>
@@ -366,8 +345,6 @@ export default function ManagerJustificationsScreen() {
         </TouchableOpacity>
       </View>
 
-      <StatusLegend />
-
       <FlatList
         data={employeeSummaries}
         keyExtractor={(item) => item.employee}
@@ -385,12 +362,12 @@ export default function ManagerJustificationsScreen() {
         showsVerticalScrollIndicator={false}
       />
 
-      {/* Modal de detalhes do funcionário */}
+      {/* Modal de justificativas do funcionário */}
       <Modal
-        visible={employeeModalVisible}
+        visible={justificationsModalVisible}
         animationType="slide"
         transparent
-        onRequestClose={closeEmployeeModal}
+        onRequestClose={closeJustificationsModal}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -401,7 +378,7 @@ export default function ManagerJustificationsScreen() {
                     <Ionicons name="person-outline" size={20} color="#F4C542" />
                     <Text style={styles.modalTitle}>{selectedEmployee.employee}</Text>
                   </View>
-                  <TouchableOpacity onPress={closeEmployeeModal} style={styles.closeButton}>
+                  <TouchableOpacity onPress={closeJustificationsModal} style={styles.closeButton}>
                     <Ionicons name="close" size={24} color="#B0B3C7" />
                   </TouchableOpacity>
                 </View>
@@ -409,19 +386,19 @@ export default function ManagerJustificationsScreen() {
                 <View style={styles.summaryStats}>
                   <View style={styles.statItem}>
                     <Text style={styles.statNumber}>{selectedEmployee.totalJustifications}</Text>
-                    <Text style={styles.statLabel}>Total</Text>
+                    <Text style={styles.statusLabel}>Total</Text>
                   </View>
                   <View style={styles.statItem}>
                     <Text style={[styles.statNumber, { color: STATUS_COLORS.pendente }]}>{selectedEmployee.pendingCount}</Text>
-                    <Text style={styles.statLabel}>Pendentes</Text>
+                    <Text style={styles.statusLabel}>Pendentes</Text>
                   </View>
                   <View style={styles.statItem}>
                     <Text style={[styles.statNumber, { color: STATUS_COLORS.aprovada }]}>{selectedEmployee.approvedCount}</Text>
-                    <Text style={styles.statLabel}>Aprovadas</Text>
+                    <Text style={styles.statusLabel}>Aprovadas</Text>
                   </View>
                   <View style={styles.statItem}>
                     <Text style={[styles.statNumber, { color: STATUS_COLORS.recusada }]}>{selectedEmployee.rejectedCount}</Text>
-                    <Text style={styles.statLabel}>Rejeitadas</Text>
+                    <Text style={styles.statusLabel}>Rejeitadas</Text>
                   </View>
                 </View>
 
@@ -492,7 +469,6 @@ export default function ManagerJustificationsScreen() {
                     <View style={styles.detailContent}>
                       <Text style={styles.detailLabel}>Status</Text>
                       <View style={[styles.statusBadge, { backgroundColor: STATUS_COLORS[selectedJustification.status] }]}>
-                        <Ionicons name={STATUS_ICONS[selectedJustification.status] as any} size={16} color="#333" />
                         <Text style={styles.statusBadgeText}>{STATUS_LABELS[selectedJustification.status]}</Text>
                       </View>
                     </View>
@@ -603,130 +579,114 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginTop: 12,
   },
-  legendContainer: {
-    backgroundColor: "#142850",
-    marginHorizontal: 16,
-    marginTop: 16,
-    marginBottom: 8,
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#1A2A4F",
-  },
-  legendTitle: {
-    color: "#F4C542",
-    fontSize: 14,
-    fontWeight: "600",
-    marginBottom: 12,
-  },
-  legendItems: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-  },
-  legendItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  legendDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-  },
-  legendText: {
-    color: "#FFFFFF",
-    fontSize: 12,
-    fontWeight: "500",
-  },
   listContainer: {
     padding: 16,
   },
   employeeCard: {
     backgroundColor: "#142850",
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
     borderWidth: 1,
     borderColor: "#1A2A4F",
+    elevation: 3,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+  },
+  employeeHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 20,
+  },
+  employeeInfo: {
+    flex: 1,
+  },
+  employeeName: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#F4C542",
+    marginBottom: 6,
+  },
+  employeeSubtitle: {
+    fontSize: 14,
+    color: "#B0B3C7",
+    marginBottom: 4,
+  },
+  lastDate: {
+    fontSize: 12,
+    color: "#8A8D9A",
+    fontStyle: "italic",
+  },
+  pendingBadge: {
+    backgroundColor: "#F4C542",
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    alignItems: "center",
+    minWidth: 60,
+  },
+  pendingBadgeText: {
+    color: "#0A1F44",
+    fontSize: 18,
+    fontWeight: "bold",
+  },
+  pendingBadgeLabel: {
+    color: "#0A1F44",
+    fontSize: 10,
+    fontWeight: "600",
+    marginTop: 2,
+  },
+  statusSummary: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    backgroundColor: "#1A2A4F",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+  },
+  statusItem: {
+    alignItems: "center",
+    flex: 1,
+  },
+  statusCount: {
+    fontSize: 24,
+    fontWeight: "bold",
+    marginBottom: 4,
+  },
+  statusLabel: {
+    color: "#B0B3C7",
+    fontSize: 11,
+    textAlign: "center",
+    fontWeight: "500",
+  },
+  viewJustificationsButton: {
+    backgroundColor: "#F4C542",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    gap: 8,
     elevation: 2,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
   },
-  employeeHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  employeeInfo: {
-    flex: 1,
-  },
-  employeeName: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#F4C542",
-    marginBottom: 4,
-  },
-  employeeSubtitle: {
-    fontSize: 14,
-    color: "#B0B3C7",
-  },
-  pendingBadge: {
-    backgroundColor: "#F4C542",
-    borderRadius: 16,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  pendingBadgeText: {
+  viewJustificationsButtonText: {
     color: "#0A1F44",
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: "bold",
-  },
-  statusSummary: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 16,
-  },
-  statusItem: {
-    alignItems: "center",
-    flex: 1,
-  },
-  statusDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginBottom: 4,
-  },
-  statusCount: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "bold",
-    marginBottom: 2,
-  },
-  statusLabel: {
-    color: "#B0B3C7",
-    fontSize: 11,
-    textAlign: "center",
-  },
-  lastDateContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  lastDate: {
-    fontSize: 12,
-    color: "#B0B3C7",
   },
   justificationCard: {
     backgroundColor: "#1A2A4F",
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 8,
+    borderRadius: 10,
+    padding: 14,
+    marginBottom: 10,
     borderWidth: 1,
     borderColor: "#243B5E",
   },
@@ -734,34 +694,32 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    marginBottom: 8,
+    marginBottom: 10,
   },
   justificationReason: {
     color: "#FFFFFF",
     fontSize: 14,
     flex: 1,
     marginRight: 12,
-    lineHeight: 18,
+    lineHeight: 20,
+    fontWeight: "500",
   },
   statusBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
     minWidth: 80,
-    justifyContent: "center",
+    alignItems: "center",
   },
   statusBadgeText: {
-    color: "#333",
+    color: "#000",
     fontSize: 11,
     fontWeight: "bold",
   },
   justificationFooter: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    gap: 6,
   },
   justificationDate: {
     fontSize: 12,
@@ -785,7 +743,7 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.6)",
+    backgroundColor: "rgba(0,0,0,0.7)",
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: 16,
@@ -839,10 +797,6 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: "bold",
     marginBottom: 4,
-  },
-  statLabel: {
-    color: "#B0B3C7",
-    fontSize: 12,
   },
   justificationsListTitle: {
     color: "#F4C542",

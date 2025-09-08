@@ -277,12 +277,6 @@ export default function ProfileScreen() {
                 onChangeText={setBusca}
               />
             </View>
-            <TouchableOpacity
-              onPress={() => setFiltroFuncao(filtroFuncao ? "" : "Terceirizado")}
-              style={{ backgroundColor: filtroFuncao ? "#F4C542" : "#1A2A4F", borderRadius: 8, padding: 8 }}
-            >
-              <Ionicons name="hammer-outline" size={18} color={filtroFuncao ? "#0A1F44" : "#B0B3C7"} />
-            </TouchableOpacity>
           </View>
           <FlatList
             data={funcionariosFiltrados}
