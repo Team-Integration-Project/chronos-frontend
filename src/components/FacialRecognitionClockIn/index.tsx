@@ -126,7 +126,6 @@ export default function FacialRecognitionClockIn() {
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string>("");
 
-
   const scanAnimation = useRef(new Animated.Value(0)).current;
   const pulseAnimation = useRef(new Animated.Value(1)).current;
   const borderAnimation = useRef(new Animated.Value(0)).current;
@@ -134,7 +133,6 @@ export default function FacialRecognitionClockIn() {
   useEffect(() => {
     if (!permission) requestPermission();
   }, [permission]);
-
 
   useEffect(() => {
     if (isScanning) {
@@ -299,7 +297,7 @@ export default function FacialRecognitionClockIn() {
 
   const scanLineTranslateY = scanAnimation.interpolate({
     inputRange: [0, 1],
-    outputRange: [0, width * 0.6 - 4],
+    outputRange: [0, width * 0.65 - 4],
   });
 
   const borderColor = borderAnimation.interpolate({
@@ -372,7 +370,9 @@ export default function FacialRecognitionClockIn() {
                 ref={cameraRef}
                 style={styles.camera}
                 facing={cameraType}
-                ratio="4:3"
+                ratio="1:1"
+                mode="picture"
+                zoom={0}
               />
               
               {/* Animação de linha de scanning */}
@@ -580,14 +580,23 @@ const styles = StyleSheet.create({
     position: "relative",
   },
   cameraFrame: {
-    borderRadius: 16,
+    borderRadius: 20,
     borderWidth: 3,
     overflow: "hidden",
     position: "relative",
+    shadowColor: "#F4C542",
+    shadowOffset: {
+      width: 0,
+      height: 0,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 8,
   },
   camera: {
-    width: width * 0.8,
-    height: width * 0.6,
+    width: width * 0.65,
+    height: width * 0.65,
+    backgroundColor: "transparent",
   },
   scanLine: {
     position: "absolute",
@@ -603,33 +612,38 @@ const styles = StyleSheet.create({
   },
   corner: {
     position: "absolute",
-    width: 20,
-    height: 20,
+    width: 25,
+    height: 25,
     borderColor: "#F4C542",
+    borderWidth: 3,
   },
   topLeft: {
-    top: 10,
-    left: 10,
+    top: 15,
+    left: 15,
     borderTopWidth: 3,
     borderLeftWidth: 3,
+    borderTopLeftRadius: 5,
   },
   topRight: {
-    top: 10,
-    right: 10,
+    top: 15,
+    right: 15,
     borderTopWidth: 3,
     borderRightWidth: 3,
+    borderTopRightRadius: 5,
   },
   bottomLeft: {
-    bottom: 10,
-    left: 10,
+    bottom: 15,
+    left: 15,
     borderBottomWidth: 3,
     borderLeftWidth: 3,
+    borderBottomLeftRadius: 5,
   },
   bottomRight: {
-    bottom: 10,
-    right: 10,
+    bottom: 15,
+    right: 15,
     borderBottomWidth: 3,
     borderRightWidth: 3,
+    borderBottomRightRadius: 5,
   },
   scanStatus: {
     alignItems: "center",
