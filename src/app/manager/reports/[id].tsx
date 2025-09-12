@@ -42,8 +42,6 @@ export default function ReportIndividualScreen() {
   const [justifications, setJustifications] = useState<any[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [justificationsLoading, setJustificationsLoading] = useState(false);
-
-  // Função para obter o intervalo de datas baseado no período atual
   const getCurrentPeriodDates = () => {
     const today = new Date();
     let start: Date, end: Date;
@@ -96,14 +94,12 @@ export default function ReportIndividualScreen() {
       if (response.status === 200) {
         const allJustifications = response.data;
         
-        // Filtrar justificativas do usuário específico
         const userJustifications = allJustifications.filter((item: any) => 
           item.user === name || item.employee === name || item.user_id === userId ||
           (item.user && item.user.toString() === name.toString()) ||
           (item.employee && item.employee.toString() === name.toString())
         );
 
-        // Filtrar por período se necessário
         const { start, end } = getCurrentPeriodDates();
         
         const filteredJustifications = userJustifications.filter((item: any) => {
@@ -809,7 +805,19 @@ type SummaryCardProps = {
 
 function SummaryCard({ label, value, color, icon, suffix = "", subtitle, onPress, isClickable = false }: SummaryCardProps) {
   const displayValue = typeof value === 'number' ? value : 0;
-  const formattedValue = label === "Horas" ? displayValue.toFixed(1) : displayValue.toString();
+  
+  let formattedValue: string;
+  let currentSuffix = suffix;
+
+  if (label === "Horas") {
+    const totalMinutes = Math.round(displayValue * 60);
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    formattedValue = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+    currentSuffix = ""; 
+  } else {
+    formattedValue = displayValue.toString();
+  }
   
   const CardComponent = isClickable ? TouchableOpacity : View;
   
@@ -821,14 +829,14 @@ function SummaryCard({ label, value, color, icon, suffix = "", subtitle, onPress
     >
       <Ionicons name={icon} size={22} color={color} style={{ marginBottom: 4 }} />
       <Text style={styles.summaryValue}>
-        {formattedValue}{suffix}
+        {formattedValue}{currentSuffix}
       </Text>
       <Text style={styles.summaryLabel}>{label}</Text>
       {subtitle && (
         <Text style={styles.summarySubtitle}>{subtitle}</Text>
       )}
       {isClickable && (
-        <Ionicons name="chevron-forward" size={16} color="#B0B3C7" style={{ marginTop: 4 }} />
+        <Ionicons name="eye-outline" size={16} color="#B0B3C7" style={{ marginTop: 4 }} />
       )}
     </CardComponent>
   );
@@ -894,7 +902,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 6,
     flex: 1,
-    maxWidth: 85,
+    width: (width - 46) / 4, 
     backgroundColor: "#142850",
     minHeight: 95,
   },
@@ -907,18 +915,18 @@ const styles = StyleSheet.create({
   summaryValue: {
     color: "#F4C542",
     fontWeight: "bold",
-    fontSize: 16,
+    fontSize: 15, 
     marginBottom: 2,
   },
   summaryLabel: {
     color: "#B0B3C7",
-    fontSize: 12,
+    fontSize: 11, 
     textAlign: "center",
     fontWeight: "600",
   },
   summarySubtitle: {
     color: "#8A8FA3",
-    fontSize: 10,
+    fontSize: 9, 
     textAlign: "center",
     marginTop: 2,
     fontStyle: "italic",
