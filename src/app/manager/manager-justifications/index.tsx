@@ -10,12 +10,20 @@ import {
   Alert,
   Dimensions,
   ActivityIndicator,
+  Linking,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import api from "@/services/api";
 
 type Status = "pendente" | "aprovada" | "recusada";
+
+interface AttachmentInfo {
+  name: string;
+  size: number;
+  type?: string;
+  uri?: string;
+}
 
 interface Justification {
   id: string;
@@ -24,6 +32,7 @@ interface Justification {
   date: string;
   status: Status;
   details: string;
+  attachment?: AttachmentInfo;
 }
 
 interface EmployeeSummary {
@@ -38,14 +47,8 @@ interface EmployeeSummary {
 
 const STATUS_COLORS: Record<Status, string> = {
   pendente: "#F4C542",
-  aprovada: "#4BB543", 
+  aprovada: "#4BB543",
   recusada: "#FF6B6B",
-};
-
-const STATUS_ICONS: Record<Status, string> = {
-  pendente: "time-outline",
-  aprovada: "checkmark-circle",
-  recusada: "close-circle",
 };
 
 const STATUS_LABELS: Record<Status, string> = {
@@ -53,6 +56,26 @@ const STATUS_LABELS: Record<Status, string> = {
   aprovada: "Aprovada",
   recusada: "Rejeitada",
 };
+
+// Definir os ícones válidos para Ionicons
+type IconName =
+  | "time-outline"
+  | "checkmark-circle"
+  | "close-circle"
+  | "document-text-outline"
+  | "document-outline"
+  | "image-outline"
+  | "videocam-outline"
+  | "musical-notes-outline"
+  | "attach-outline"
+  | "person-outline"
+  | "arrow-back"
+  | "refresh"
+  | "calendar-outline"
+  | "eye-outline"
+  | "close"
+  | "checkmark"
+  | "download-outline";
 
 const { width } = Dimensions.get("window");
 
@@ -66,9 +89,9 @@ export default function ManagerJustificationsScreen() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   const mapJustificationStatus = (item: any): Status => {
-    if (item.status === 'aprovada' || item.status === 'approved') {
+    if (item.status === "aprovada" || item.status === "approved") {
       return "aprovada";
-    } else if (item.status === 'recusada' || item.status === 'rejected') {
+    } else if (item.status === "recusada" || item.status === "rejected") {
       return "recusada";
     } else if (item.approval === true || item.approved === true) {
       return "aprovada";
@@ -79,10 +102,68 @@ export default function ManagerJustificationsScreen() {
     }
   };
 
+  const getFileIcon = (fileName: string): IconName => {
+    const extension = fileName.split(".").pop()?.toLowerCase();
+    switch (extension) {
+      case "pdf":
+        return "document-text-outline";
+      case "doc":
+      case "docx":
+        return "document-outline";
+      case "jpg":
+      case "jpeg":
+      case "png":
+      case "gif":
+        return "image-outline";
+      case "mp4":
+      case "avi":
+      case "mov":
+        return "videocam-outline";
+      case "mp3":
+      case "wav":
+        return "musical-notes-outline";
+      default:
+        return "attach-outline";
+    }
+  };
+
+  const getFileTypeLabel = (fileName: string): string => {
+    const extension = fileName.split(".").pop()?.toLowerCase();
+    switch (extension) {
+      case "pdf":
+        return "Documento PDF";
+      case "doc":
+      case "docx":
+        return "Documento Word";
+      case "jpg":
+      case "jpeg":
+      case "png":
+      case "gif":
+        return "Imagem";
+      case "mp4":
+      case "avi":
+      case "mov":
+        return "Vídeo";
+      case "mp3":
+      case "wav":
+        return "Áudio";
+      default:
+        return "Arquivo";
+    }
+  };
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return "0 Bytes";
+    const k = 1024;
+    const sizes = ["Bytes", "KB", "MB", "GB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+  };
+
   const organizeJustificationsByEmployee = (justifications: Justification[]): EmployeeSummary[] => {
     const employeeMap = new Map<string, Justification[]>();
 
-    justifications.forEach(justification => {
+    justifications.forEach((justification) => {
       const employee = justification.employee;
       if (!employeeMap.has(employee)) {
         employeeMap.set(employee, []);
@@ -92,12 +173,12 @@ export default function ManagerJustificationsScreen() {
 
     const summaries: EmployeeSummary[] = [];
     employeeMap.forEach((justifications, employee) => {
-      const pendingCount = justifications.filter(j => j.status === "pendente").length;
-      const approvedCount = justifications.filter(j => j.status === "aprovada").length;
-      const rejectedCount = justifications.filter(j => j.status === "recusada").length;
-      
-      const sortedJustifications = justifications.sort((a, b) => 
-        new Date(b.date).getTime() - new Date(a.date).getTime()
+      const pendingCount = justifications.filter((j) => j.status === "pendente").length;
+      const approvedCount = justifications.filter((j) => j.status === "aprovada").length;
+      const rejectedCount = justifications.filter((j) => j.status === "recusada").length;
+
+      const sortedJustifications = justifications.sort(
+        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
       );
 
       summaries.push({
@@ -107,7 +188,7 @@ export default function ManagerJustificationsScreen() {
         approvedCount,
         rejectedCount,
         justifications: sortedJustifications,
-        lastJustificationDate: sortedJustifications[0]?.date || "N/A"
+        lastJustificationDate: sortedJustifications[0]?.date || "N/A",
       });
     });
 
@@ -126,20 +207,75 @@ export default function ManagerJustificationsScreen() {
       setLoading(true);
       const response = await api.get("/justification/");
       console.log("Resposta completa da API:", response.data);
-      
+
       if (response.status === 200) {
-        const justifications = response.data.map((item: any) => ({
-          id: item.id ? item.id.toString() : "N/A",
-          employee: item.user || item.employee || "Desconhecido",
-          reason: item.reason || "Sem motivo",
-          date: item.date || (item.created_at ? item.created_at.split("T")[0] : "N/A"),
-          status: mapJustificationStatus(item),
-          details: item.reason || item.details || "Sem detalhes",
-        }));
-        
+        const justifications = response.data.map((item: any) => {
+          console.log("Item da API:", item);
+          console.log("Campos de attachment:", {
+            attachment: item.attachment,
+            attachmentInfo: item.attachmentInfo,
+            attachment_url: item.attachment_url,
+            file: item.file,
+            document: item.document,
+            media: item.media,
+          });
+
+          let attachment = undefined;
+
+          if (item.attachment) {
+            attachment = {
+              name: item.attachment.name || item.attachment.filename || "arquivo_anexo",
+              size: item.attachment.size || 0,
+              type: item.attachment.type || item.attachment.contentType || item.attachment.mimeType,
+              uri: item.attachment.uri || item.attachment.url || item.attachment.path,
+            };
+          } else if (item.attachmentInfo) {
+            attachment = {
+              name: item.attachmentInfo.name || item.attachmentInfo.filename || "arquivo_anexo",
+              size: item.attachmentInfo.size || 0,
+              type: item.attachmentInfo.type || item.attachmentInfo.contentType,
+              uri: item.attachmentInfo.uri || item.attachmentInfo.url,
+            };
+          } else if (item.file) {
+            attachment = {
+              name: item.file.name || item.file.filename || "arquivo_anexo",
+              size: item.file.size || 0,
+              type: item.file.type || item.file.contentType,
+              uri: item.file.uri || item.file.url || item.file.path,
+            };
+          } else if (item.document) {
+            attachment = {
+              name: item.document.name || item.document.filename || "documento",
+              size: item.document.size || 0,
+              type: item.document.type || item.document.contentType,
+              uri: item.document.uri || item.document.url || item.document.path,
+            };
+          } else if (item.attachment_url) {
+            const filename = item.attachment_url.split("/").pop() || "arquivo_anexo";
+            attachment = {
+              name: filename,
+              size: 0,
+              type: undefined,
+              uri: item.attachment_url,
+            };
+          }
+
+          console.log("Attachment processado:", attachment);
+
+          return {
+            id: item.id ? item.id.toString() : "N/A",
+            employee: item.user || item.employee || "Desconhecido",
+            reason: item.reason || "Sem motivo",
+            date: item.date || (item.created_at ? item.created_at.split("T")[0] : "N/A"),
+            status: mapJustificationStatus(item),
+            details: item.reason || item.details || "Sem detalhes",
+            attachment: attachment,
+          };
+        });
+
         const organizedData = organizeJustificationsByEmployee(justifications);
         setEmployeeSummaries(organizedData);
-        console.log("Justificativas organizadas:", organizedData);
+        console.log("Justificativas organizadas com attachments:", organizedData);
       } else {
         Alert.alert("Erro", "Falha ao carregar as justificativas.");
       }
@@ -159,12 +295,12 @@ export default function ManagerJustificationsScreen() {
     try {
       setActionLoading(id);
       console.log(`Tentando aprovar justificativa ${id}`);
-      
-      const response = await api.post(`/justification/${id}/approve/`, { 
+
+      const response = await api.post(`/justification/${id}/approve/`, {
         approved: true,
-        approval: true
+        approval: true,
       });
-      
+
       if (response.status === 200) {
         updateJustificationStatus(id, "aprovada");
         Alert.alert("✅ Sucesso", "Justificativa aprovada com sucesso!");
@@ -184,12 +320,12 @@ export default function ManagerJustificationsScreen() {
     try {
       setActionLoading(id);
       console.log(`Tentando reprovar justificativa ${id}`);
-      
-      const response = await api.post(`/justification/${id}/approve/`, { 
+
+      const response = await api.post(`/justification/${id}/approve/`, {
         approved: false,
-        approval: false
+        approval: false,
       });
-      
+
       if (response.status === 200) {
         updateJustificationStatus(id, "recusada");
         Alert.alert("✅ Sucesso", "Justificativa rejeitada com sucesso!");
@@ -206,33 +342,37 @@ export default function ManagerJustificationsScreen() {
   };
 
   const updateJustificationStatus = (id: string, newStatus: Status) => {
-    setEmployeeSummaries(prev => prev.map(emp => ({
-      ...emp,
-      justifications: emp.justifications.map(j => 
-        j.id === id ? { ...j, status: newStatus } : j
-      ),
-      pendingCount: emp.justifications.filter(j => 
-        j.id === id ? newStatus === "pendente" : j.status === "pendente"
-      ).length,
-      approvedCount: emp.justifications.filter(j => 
-        j.id === id ? newStatus === "aprovada" : j.status === "aprovada"
-      ).length,
-      rejectedCount: emp.justifications.filter(j => 
-        j.id === id ? newStatus === "recusada" : j.status === "recusada"
-      ).length,
-    })));
+    setEmployeeSummaries((prev) =>
+      prev.map((emp) => ({
+        ...emp,
+        justifications: emp.justifications.map((j) => (j.id === id ? { ...j, status: newStatus } : j)),
+        pendingCount: emp.justifications.filter((j) =>
+          j.id === id ? newStatus === "pendente" : j.status === "pendente"
+        ).length,
+        approvedCount: emp.justifications.filter((j) =>
+          j.id === id ? newStatus === "aprovada" : j.status === "aprovada"
+        ).length,
+        rejectedCount: emp.justifications.filter((j) =>
+          j.id === id ? newStatus === "recusada" : j.status === "recusada"
+        ).length,
+      }))
+    );
 
     if (selectedEmployee) {
-      setSelectedEmployee(prev => prev ? {
-        ...prev,
-        justifications: prev.justifications.map(j => 
-          j.id === id ? { ...j, status: newStatus } : j
-        )
-      } : null);
+      setSelectedEmployee((prev) =>
+        prev
+          ? {
+              ...prev,
+              justifications: prev.justifications.map((j) =>
+                j.id === id ? { ...j, status: newStatus } : j
+              ),
+            }
+          : null
+      );
     }
 
     if (selectedJustification && selectedJustification.id === id) {
-      setSelectedJustification(prev => prev ? { ...prev, status: newStatus } : null);
+      setSelectedJustification((prev) => (prev ? { ...prev, status: newStatus } : null));
     }
   };
 
@@ -256,21 +396,53 @@ export default function ManagerJustificationsScreen() {
     setSelectedJustification(null);
   };
 
+  const handleDownloadAttachment = async (attachment: AttachmentInfo) => {
+    try {
+      if (attachment.uri) {
+        const canOpen = await Linking.canOpenURL(attachment.uri);
+        if (canOpen) {
+          await Linking.openURL(attachment.uri);
+        } else {
+          Alert.alert(
+            "Anexo Indisponível",
+            "Não foi possível abrir o anexo. O arquivo pode ter sido movido ou deletado."
+          );
+        }
+      } else {
+        Alert.alert(
+          "Informações do Anexo",
+          `Nome: ${attachment.name}\nTamanho: ${formatFileSize(attachment.size)}${
+            attachment.type ? `\nTipo: ${attachment.type}` : ""
+          }`,
+          [
+            { text: "Fechar", style: "cancel" },
+            { text: "Tentar Download", onPress: () => console.log("Download attempt:", attachment.name) },
+          ]
+        );
+      }
+    } catch (error) {
+      console.error("Erro ao abrir anexo:", error);
+      Alert.alert("Erro", "Não foi possível abrir o anexo.");
+    }
+  };
+
   const renderEmployeeItem = ({ item }: { item: EmployeeSummary }) => (
     <View style={styles.employeeCard}>
       <View style={styles.employeeHeader}>
         <View style={styles.employeeInfo}>
           <Text style={styles.employeeName}>{item.employee}</Text>
           <Text style={styles.employeeSubtitle}>
-            {item.totalJustifications} justificativa{item.totalJustifications !== 1 ? 's' : ''}
+            {item.totalJustifications} justificativa{item.totalJustifications !== 1 ? "s" : ""}
           </Text>
           <Text style={styles.lastDate}>Última: {item.lastJustificationDate}</Text>
         </View>
-        
+
         {item.pendingCount > 0 && (
           <View style={styles.pendingBadge}>
             <Text style={styles.pendingBadgeText}>{item.pendingCount}</Text>
-            <Text style={styles.pendingBadgeLabel}>Pendente{item.pendingCount !== 1 ? 's' : ''}</Text>
+            <Text style={styles.pendingBadgeLabel}>
+              Pendente{item.pendingCount !== 1 ? "s" : ""}
+            </Text>
           </View>
         )}
       </View>
@@ -278,20 +450,20 @@ export default function ManagerJustificationsScreen() {
       <View style={styles.statusSummary}>
         <View style={styles.statusItem}>
           <Text style={[styles.statusCount, { color: STATUS_COLORS.pendente }]}>{item.pendingCount}</Text>
-          <Text style={styles.statusLabel}>Pendente{item.pendingCount !== 1 ? 's' : ''}</Text>
+          <Text style={styles.statusLabel}>Pendente{item.pendingCount !== 1 ? "s" : ""}</Text>
         </View>
         <View style={styles.statusItem}>
           <Text style={[styles.statusCount, { color: STATUS_COLORS.aprovada }]}>{item.approvedCount}</Text>
-          <Text style={styles.statusLabel}>Aprovada{item.approvedCount !== 1 ? 's' : ''}</Text>
+          <Text style={styles.statusLabel}>Aprovada{item.approvedCount !== 1 ? "s" : ""}</Text>
         </View>
         <View style={styles.statusItem}>
           <Text style={[styles.statusCount, { color: STATUS_COLORS.recusada }]}>{item.rejectedCount}</Text>
-          <Text style={styles.statusLabel}>Rejeitada{item.rejectedCount !== 1 ? 's' : ''}</Text>
+          <Text style={styles.statusLabel}>Rejeitada{item.rejectedCount !== 1 ? "s" : ""}</Text>
         </View>
       </View>
 
-      <TouchableOpacity 
-        style={styles.viewJustificationsButton} 
+      <TouchableOpacity
+        style={styles.viewJustificationsButton}
         onPress={() => openJustificationsModal(item)}
       >
         <Ionicons name="eye-outline" size={18} color="#0A1F44" />
@@ -303,7 +475,17 @@ export default function ManagerJustificationsScreen() {
   const renderJustificationItem = ({ item }: { item: Justification }) => (
     <TouchableOpacity style={styles.justificationCard} onPress={() => openJustificationDetails(item)}>
       <View style={styles.justificationHeader}>
-        <Text style={styles.justificationReason} numberOfLines={2}>{item.reason}</Text>
+        <View style={styles.justificationContent}>
+          <Text style={styles.justificationReason} numberOfLines={2}>
+            {item.reason}
+          </Text>
+          {item.attachment && (
+            <View style={styles.attachmentIndicator}>
+              <Ionicons name="attach" size={12} color="#F4C542" />
+              <Text style={styles.attachmentText}>Anexo</Text>
+            </View>
+          )}
+        </View>
         <View style={[styles.statusBadge, { backgroundColor: STATUS_COLORS[item.status] }]}>
           <Text style={styles.statusBadgeText}>{STATUS_LABELS[item.status]}</Text>
         </View>
@@ -362,7 +544,6 @@ export default function ManagerJustificationsScreen() {
         showsVerticalScrollIndicator={false}
       />
 
-      {/* Modal de justificativas do funcionário */}
       <Modal
         visible={justificationsModalVisible}
         animationType="slide"
@@ -370,45 +551,49 @@ export default function ManagerJustificationsScreen() {
         onRequestClose={closeJustificationsModal}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, styles.compactModal]}>
             {selectedEmployee && (
               <>
                 <View style={styles.modalHeader}>
                   <View style={styles.modalTitleContainer}>
-                    <Ionicons name="person-outline" size={20} color="#F4C542" />
+                    <Ionicons name="person-outline" size={18} color="#F4C542" />
                     <Text style={styles.modalTitle}>{selectedEmployee.employee}</Text>
                   </View>
                   <TouchableOpacity onPress={closeJustificationsModal} style={styles.closeButton}>
-                    <Ionicons name="close" size={24} color="#B0B3C7" />
+                    <Ionicons name="close" size={20} color="#B0B3C7" />
                   </TouchableOpacity>
                 </View>
 
-                <View style={styles.summaryStats}>
-                  <View style={styles.statItem}>
-                    <Text style={styles.statNumber}>{selectedEmployee.totalJustifications}</Text>
-                    <Text style={styles.statusLabel}>Total</Text>
+                <View style={styles.compactSummaryStats}>
+                  <View style={styles.statusItem}>
+                    <Text style={styles.compactStatNumber}>{selectedEmployee.totalJustifications}</Text>
+                    <Text style={styles.compactStatusLabel}>Total</Text>
                   </View>
-                  <View style={styles.statItem}>
-                    <Text style={[styles.statNumber, { color: STATUS_COLORS.pendente }]}>{selectedEmployee.pendingCount}</Text>
-                    <Text style={styles.statusLabel}>Pendentes</Text>
+                  <View style={styles.statusItem}>
+                    <Text style={[styles.compactStatNumber, { color: STATUS_COLORS.pendente }]}>
+                      {selectedEmployee.pendingCount}
+                    </Text>
+                    <Text style={styles.compactStatusLabel}>Pendentes</Text>
                   </View>
-                  <View style={styles.statItem}>
-                    <Text style={[styles.statNumber, { color: STATUS_COLORS.aprovada }]}>{selectedEmployee.approvedCount}</Text>
-                    <Text style={styles.statusLabel}>Aprovadas</Text>
+                  <View style={styles.statusItem}>
+                    <Text style={[styles.compactStatNumber, { color: STATUS_COLORS.aprovada }]}>
+                      {selectedEmployee.approvedCount}
+                    </Text>
+                    <Text style={styles.compactStatusLabel}>Aprovadas</Text>
                   </View>
-                  <View style={styles.statItem}>
-                    <Text style={[styles.statNumber, { color: STATUS_COLORS.recusada }]}>{selectedEmployee.rejectedCount}</Text>
-                    <Text style={styles.statusLabel}>Rejeitadas</Text>
+                  <View style={styles.statusItem}>
+                    <Text style={[styles.compactStatNumber, { color: STATUS_COLORS.recusada }]}>
+                      {selectedEmployee.rejectedCount}
+                    </Text>
+                    <Text style={styles.compactStatusLabel}>Rejeitadas</Text>
                   </View>
                 </View>
-
-                <Text style={styles.justificationsListTitle}>Justificativas:</Text>
 
                 <FlatList
                   data={selectedEmployee.justifications}
                   keyExtractor={(item) => item.id}
                   renderItem={renderJustificationItem}
-                  style={styles.justificationsList}
+                  style={styles.compactJustificationsList}
                   showsVerticalScrollIndicator={false}
                   ListEmptyComponent={
                     <Text style={styles.emptyJustifications}>Nenhuma justificativa encontrada</Text>
@@ -420,7 +605,6 @@ export default function ManagerJustificationsScreen() {
         </View>
       </Modal>
 
-      {/* Modal de detalhes da justificativa */}
       <Modal
         visible={justificationModalVisible}
         animationType="slide"
@@ -428,102 +612,113 @@ export default function ManagerJustificationsScreen() {
         onRequestClose={closeJustificationModal}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, styles.compactModal]}>
             {selectedJustification && (
               <>
                 <View style={styles.modalHeader}>
                   <View style={styles.modalTitleContainer}>
-                    <Ionicons name="document-text-outline" size={20} color="#F4C542" />
-                    <Text style={styles.modalTitle}>Detalhes da Justificativa</Text>
+                    <Ionicons name="document-text-outline" size={18} color="#F4C542" />
+                    <Text style={styles.compactModalTitle}>Detalhes</Text>
                   </View>
                   <TouchableOpacity onPress={closeJustificationModal} style={styles.closeButton}>
-                    <Ionicons name="close" size={24} color="#B0B3C7" />
+                    <Ionicons name="close" size={20} color="#B0B3C7" />
                   </TouchableOpacity>
                 </View>
 
-                <View style={styles.detailsContainer}>
-                  <View style={styles.detailRow}>
-                    <View style={styles.detailIcon}>
-                      <Ionicons name="person-outline" size={16} color="#F4C542" />
-                    </View>
-                    <View style={styles.detailContent}>
-                      <Text style={styles.detailLabel}>Funcionário</Text>
-                      <Text style={styles.detailValue}>{selectedJustification.employee}</Text>
+                <View style={styles.compactDetailsContainer}>
+                  <View style={styles.compactDetailRow}>
+                    <Text style={styles.compactDetailLabel}>Funcionário:</Text>
+                    <Text style={styles.compactDetailValue}>{selectedJustification.employee}</Text>
+                  </View>
+
+                  <View style={styles.compactDetailRow}>
+                    <Text style={styles.compactDetailLabel}>Data:</Text>
+                    <Text style={styles.compactDetailValue}>{selectedJustification.date}</Text>
+                  </View>
+
+                  <View style={styles.compactDetailRow}>
+                    <Text style={styles.compactDetailLabel}>Status:</Text>
+                    <View style={[styles.compactStatusBadge, { backgroundColor: STATUS_COLORS[selectedJustification.status] }]}>
+                      <Text style={styles.statusBadgeText}>{STATUS_LABELS[selectedJustification.status]}</Text>
                     </View>
                   </View>
 
-                  <View style={styles.detailRow}>
-                    <View style={styles.detailIcon}>
-                      <Ionicons name="calendar-outline" size={16} color="#F4C542" />
-                    </View>
-                    <View style={styles.detailContent}>
-                      <Text style={styles.detailLabel}>Data</Text>
-                      <Text style={styles.detailValue}>{selectedJustification.date}</Text>
-                    </View>
+                  <View style={styles.compactDetailColumn}>
+                    <Text style={styles.compactDetailLabel}>Motivo:</Text>
+                    <Text style={styles.compactDetailValueMultiline}>{selectedJustification.reason}</Text>
                   </View>
 
-                  <View style={styles.detailRow}>
-                    <View style={styles.detailIcon}>
-                      <Ionicons name="information-circle-outline" size={16} color="#F4C542" />
+                  {selectedJustification.attachment && (
+                    <View style={styles.compactDetailColumn}>
+                      <Text style={styles.compactDetailLabel}>Anexo:</Text>
+                      <TouchableOpacity
+                        style={styles.attachmentContainer}
+                        onPress={() => handleDownloadAttachment(selectedJustification.attachment!)}
+                        activeOpacity={0.7}
+                      >
+                        <View style={styles.attachmentIconContainer}>
+                          <Ionicons
+                            name={getFileIcon(selectedJustification.attachment.name)}
+                            size={28}
+                            color="#F4C542"
+                          />
+                        </View>
+                        <View style={styles.attachmentInfo}>
+                          <Text style={styles.attachmentName} numberOfLines={1}>
+                            {selectedJustification.attachment.name}
+                          </Text>
+                          <Text style={styles.attachmentDetails}>
+                            {getFileTypeLabel(selectedJustification.attachment.name)} •{" "}
+                            {formatFileSize(selectedJustification.attachment.size)}
+                          </Text>
+                        </View>
+                        <Ionicons name="download-outline" size={20} color="#F4C542" />
+                      </TouchableOpacity>
                     </View>
-                    <View style={styles.detailContent}>
-                      <Text style={styles.detailLabel}>Status</Text>
-                      <View style={[styles.statusBadge, { backgroundColor: STATUS_COLORS[selectedJustification.status] }]}>
-                        <Text style={styles.statusBadgeText}>{STATUS_LABELS[selectedJustification.status]}</Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  <View style={styles.detailColumn}>
-                    <View style={styles.detailIcon}>
-                      <Ionicons name="chatbubble-outline" size={16} color="#F4C542" />
-                    </View>
-                    <View style={styles.detailContent}>
-                      <Text style={styles.detailLabel}>Motivo da Justificativa</Text>
-                      <Text style={styles.detailValueMultiline}>{selectedJustification.reason}</Text>
-                    </View>
-                  </View>
+                  )}
                 </View>
 
                 {selectedJustification.status === "pendente" && (
-                  <View style={styles.actionButtons}>
-                    <TouchableOpacity 
-                      style={[styles.actionButton, styles.approveButton]}
+                  <View style={styles.compactActionButtons}>
+                    <TouchableOpacity
+                      style={[styles.compactActionButton, styles.approveButton]}
                       onPress={() => handleApprove(selectedJustification.id)}
                       disabled={actionLoading === selectedJustification.id}
                     >
                       {actionLoading === selectedJustification.id ? (
                         <ActivityIndicator size="small" color="#fff" />
                       ) : (
-                        <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                        <Ionicons name="checkmark" size={16} color="#fff" />
                       )}
-                      <Text style={styles.actionButtonText}>Aprovar</Text>
+                      <Text style={styles.compactActionButtonText}>Aprovar</Text>
                     </TouchableOpacity>
 
-                    <TouchableOpacity 
-                      style={[styles.actionButton, styles.rejectButton]}
+                    <TouchableOpacity
+                      style={[styles.compactActionButton, styles.rejectButton]}
                       onPress={() => handleReject(selectedJustification.id)}
                       disabled={actionLoading === selectedJustification.id}
                     >
                       {actionLoading === selectedJustification.id ? (
                         <ActivityIndicator size="small" color="#fff" />
                       ) : (
-                        <Ionicons name="close-circle" size={20} color="#fff" />
+                        <Ionicons name="close" size={16} color="#fff" />
                       )}
-                      <Text style={styles.actionButtonText}>Rejeitar</Text>
+                      <Text style={styles.compactActionButtonText}>Rejeitar</Text>
                     </TouchableOpacity>
                   </View>
                 )}
 
                 {selectedJustification.status !== "pendente" && (
-                  <View style={styles.processedInfo}>
-                    <Ionicons 
-                      name={selectedJustification.status === "aprovada" ? "checkmark-circle" : "close-circle"} 
-                      size={24} 
-                      color={STATUS_COLORS[selectedJustification.status]} 
+                  <View style={styles.compactProcessedInfo}>
+                    <Ionicons
+                      name={selectedJustification.status === "aprovada" ? "checkmark-circle" : "close-circle"}
+                      size={20}
+                      color={STATUS_COLORS[selectedJustification.status]}
                     />
-                    <Text style={[styles.processedText, { color: STATUS_COLORS[selectedJustification.status] }]}>
-                      Justificativa {selectedJustification.status}
+                    <Text
+                      style={[styles.compactProcessedText, { color: STATUS_COLORS[selectedJustification.status] }]}
+                    >
+                      {STATUS_LABELS[selectedJustification.status]}
                     </Text>
                   </View>
                 )}
@@ -696,13 +891,27 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     marginBottom: 10,
   },
+  justificationContent: {
+    flex: 1,
+    marginRight: 12,
+  },
   justificationReason: {
     color: "#FFFFFF",
     fontSize: 14,
-    flex: 1,
-    marginRight: 12,
     lineHeight: 20,
     fontWeight: "500",
+    marginBottom: 4,
+  },
+  attachmentIndicator: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 4,
+  },
+  attachmentText: {
+    color: "#F4C542",
+    fontSize: 11,
+    fontWeight: "600",
   },
   statusBadge: {
     paddingHorizontal: 10,
@@ -758,12 +967,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#1A2A4F",
   },
+  compactModal: {
+    maxHeight: "80%",
+    padding: 16,
+  },
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 20,
-    paddingBottom: 16,
+    marginBottom: 16,
+    paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: "#1A2A4F",
   },
@@ -775,37 +988,39 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     color: "#F4C542",
-    fontSize: 18,
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  compactModalTitle: {
+    color: "#F4C542",
+    fontSize: 16,
     fontWeight: "bold",
   },
   closeButton: {
     padding: 4,
   },
-  summaryStats: {
+  compactSummaryStats: {
     flexDirection: "row",
     justifyContent: "space-around",
     backgroundColor: "#1A2A4F",
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 16,
   },
-  statItem: {
-    alignItems: "center",
-  },
-  statNumber: {
+  compactStatNumber: {
     color: "#FFFFFF",
-    fontSize: 20,
-    fontWeight: "bold",
-    marginBottom: 4,
-  },
-  justificationsListTitle: {
-    color: "#F4C542",
     fontSize: 16,
-    fontWeight: "600",
-    marginBottom: 12,
+    fontWeight: "bold",
+    marginBottom: 2,
   },
-  justificationsList: {
-    maxHeight: 300,
+  compactStatusLabel: {
+    color: "#B0B3C7",
+    fontSize: 10,
+    textAlign: "center",
+    fontWeight: "500",
+  },
+  compactJustificationsList: {
+    maxHeight: 250,
   },
   emptyJustifications: {
     color: "#B0B3C7",
@@ -814,66 +1029,96 @@ const styles = StyleSheet.create({
     padding: 20,
     fontStyle: "italic",
   },
-  detailsContainer: {
-    marginBottom: 20,
-  },
-  detailRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
+  compactDetailsContainer: {
     marginBottom: 16,
-    paddingVertical: 8,
   },
-  detailColumn: {
+  compactDetailRow: {
     flexDirection: "row",
-    alignItems: "flex-start",
-    marginBottom: 16,
-    paddingVertical: 8,
-  },
-  detailIcon: {
-    width: 32,
+    justifyContent: "space-between",
     alignItems: "center",
-    paddingTop: 2,
+    marginBottom: 12,
+    paddingVertical: 4,
   },
-  detailContent: {
-    flex: 1,
-    marginLeft: 8,
+  compactDetailColumn: {
+    marginBottom: 12,
+    paddingVertical: 4,
   },
-  detailLabel: {
+  compactDetailLabel: {
     color: "#B0B3C7",
     fontSize: 12,
     fontWeight: "600",
     marginBottom: 4,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
   },
-  detailValue: {
+  compactDetailValue: {
     color: "#FFFFFF",
     fontSize: 14,
     fontWeight: "500",
+    flex: 1,
+    textAlign: "right",
   },
-  detailValueMultiline: {
+  compactDetailValueMultiline: {
     color: "#FFFFFF",
     fontSize: 14,
-    lineHeight: 20,
+    lineHeight: 18,
     backgroundColor: "#1A2A4F",
-    padding: 12,
-    borderRadius: 8,
+    padding: 10,
+    borderRadius: 6,
     borderWidth: 1,
     borderColor: "#243B5E",
   },
-  actionButtons: {
-    flexDirection: "row",
-    gap: 12,
-    marginTop: 20,
+  compactStatusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    alignItems: "center",
   },
-  actionButton: {
+  attachmentContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#1A2A4F",
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#2A3D66",
+    gap: 12,
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+  },
+  attachmentIconContainer: {
+    backgroundColor: "#2A3D66",
+    borderRadius: 8,
+    padding: 8,
+  },
+  attachmentInfo: {
+    flex: 1,
+  },
+  attachmentName: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "600",
+    marginBottom: 4,
+  },
+  attachmentDetails: {
+    color: "#B0B3C7",
+    fontSize: 12,
+    fontWeight: "500",
+  },
+  compactActionButtons: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 16,
+  },
+  compactActionButton: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 14,
-    borderRadius: 10,
-    gap: 8,
+    paddingVertical: 10,
+    borderRadius: 8,
+    gap: 6,
     elevation: 2,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
@@ -886,26 +1131,25 @@ const styles = StyleSheet.create({
   rejectButton: {
     backgroundColor: "#FF6B6B",
   },
-  actionButtonText: {
+  compactActionButtonText: {
     color: "#FFFFFF",
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "bold",
   },
-  processedInfo: {
+  compactProcessedInfo: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#1A2A4F",
-    padding: 16,
-    borderRadius: 10,
-    marginTop: 20,
-    gap: 12,
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 16,
+    gap: 8,
     borderWidth: 1,
     borderColor: "#243B5E",
   },
-  processedText: {
-    fontSize: 16,
+  compactProcessedText: {
+    fontSize: 14,
     fontWeight: "600",
-    textTransform: "capitalize",
   },
 });
