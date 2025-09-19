@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Alert, Dimensions, Linking, Animated, Modal } from "react-native";
 import { CameraView, useCameraPermissions, CameraPictureOptions } from "expo-camera";
-import { ButtonLogin } from "../ButtonLogin";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import axios from "axios";
 import api from "../../services/api";
+import * as Location from "expo-location";
 
 const { width } = Dimensions.get("window");
 
@@ -18,6 +18,11 @@ interface EmployeeData {
   empresa?: string;
   date?: string;
   last_records?: any[];
+  latitude?: number;
+  longitude?: number;
+  is_valid_location?: boolean;
+  distance_from_workplace_meters?: number;
+  place_name?: string;
 }
 
 interface CustomSuccessModalProps {
@@ -83,6 +88,16 @@ const CustomSuccessModal: React.FC<CustomSuccessModalProps> = ({
                   <Ionicons name="time-outline" size={16} color="#F4C542" />
                   <Text style={styles.timeText}>{currentTime}</Text>
                 </View>
+                {employeeData && (employeeData.place_name || employeeData.latitude || employeeData.longitude) && (
+                  <View style={styles.timeItem}>
+                    <Ionicons name="location-outline" size={16} color="#F4C542" />
+                    <Text style={styles.timeText}>
+                      Local do Ponto: {employeeData.place_name || `Lat: ${employeeData.latitude?.toFixed(6)}, Lon: ${employeeData.longitude?.toFixed(6)}`} 
+                      - {employeeData.is_valid_location ? 'Válido' : 'Fora do raio'}
+                      {employeeData.distance_from_workplace_meters ? ` (${employeeData.distance_from_workplace_meters.toFixed(2)}m do local de trabalho)` : ''}
+                    </Text>
+                  </View>
+                )}
               </View>
 
               <View style={styles.employeeInfo}>
@@ -116,6 +131,8 @@ const CustomSuccessModal: React.FC<CustomSuccessModalProps> = ({
 export default function FacialRecognitionClockIn() {
   const cameraRef = useRef<CameraView>(null);
   const [permission, requestPermission] = useCameraPermissions();
+  const [locationPermission, requestLocationPermission] = Location.useForegroundPermissions();
+  const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
   const [clockInType, setClockInType] = useState<"entrada" | "saida" | "almoco" | null>(null);
@@ -132,7 +149,26 @@ export default function FacialRecognitionClockIn() {
 
   useEffect(() => {
     if (!permission) requestPermission();
-  }, [permission]);
+    if (!locationPermission) requestLocationPermission();
+  }, [permission, locationPermission]);
+
+  useEffect(() => {
+    if (locationPermission?.granted) {
+      (async () => {
+        try {
+          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+          setLocation(loc);
+          console.log('Coordenadas capturadas:', {
+            latitude: loc.coords.latitude,
+            longitude: loc.coords.longitude,
+          });
+        } catch (error) {
+          console.error('Erro ao obter localização:', error);
+          Alert.alert("Erro", "Falha ao obter localização: " + (error as Error).message);
+        }
+      })();
+    }
+  }, [locationPermission]);
 
   useEffect(() => {
     if (isScanning) {
@@ -205,6 +241,20 @@ export default function FacialRecognitionClockIn() {
       ]);
       return;
     }
+    if (!locationPermission?.granted) {
+      Alert.alert("Erro", "Permissão de localização não concedida.", [
+        { text: "Abrir Configurações", onPress: () => Linking.openSettings() },
+        { text: "OK" },
+      ]);
+      return;
+    }
+    if (!location) {
+      Alert.alert("Erro", "Localização não disponível. Tente novamente.", [
+        { text: "Tentar Novamente", onPress: () => requestLocationPermission() },
+        { text: "OK" },
+      ]);
+      return;
+    }
 
     setClockInType(type);
     setIsScanning(true);
@@ -223,6 +273,8 @@ export default function FacialRecognitionClockIn() {
         name: "face_image.jpg",
       } as any);
       formData.append("point_type", type);
+      formData.append("latitude", location.coords.latitude.toString());
+      formData.append("longitude", location.coords.longitude.toString());
 
       const response = await api.post("/mark-attendance/", formData, {
         headers: { "Content-Type": "multipart/form-data" },
@@ -233,6 +285,18 @@ export default function FacialRecognitionClockIn() {
         nome: response.data.full_name,
         cpf: response.data.cpf,
         phone_number: response.data.phone_number,
+        latitude: response.data.latitude,
+        longitude: response.data.longitude,
+        is_valid_location: response.data.is_valid_location,
+        distance_from_workplace_meters: response.data.distance_from_workplace_meters,
+        place_name: response.data.place_name
+      });
+
+      console.log('Dados recebidos do backend:', {
+        latitude: response.data.latitude,
+        longitude: response.data.longitude,
+        is_valid_location: response.data.is_valid_location,
+        place_name: response.data.place_name
       });
 
       handleScanComplete(type);
@@ -249,16 +313,6 @@ export default function FacialRecognitionClockIn() {
     } finally {
       setIsScanning(false);
     }
-
-    const interval = setInterval(() => {
-      setScanProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          return 100;
-        }
-        return prev + 10;
-      });
-    }, 200);
   };
 
   const handleScanComplete = (type: "entrada" | "saida" | "almoco") => {
@@ -277,13 +331,16 @@ export default function FacialRecognitionClockIn() {
   const handleBackToHome = () => router.back();
   const handleToggleCamera = () => setCameraType((prev) => (prev === "front" ? "back" : "front"));
 
-  if (!permission) return <View style={styles.container} />;
-  if (!permission.granted) {
+  if (!permission || !locationPermission) return <View style={styles.container} />;
+  if (!permission.granted || !locationPermission.granted) {
     return (
       <View style={styles.container}>
-        <Text style={styles.message}>Precisamos da sua permissão para usar a câmera</Text>
+        <Text style={styles.message}>Precisamos da sua permissão para usar a câmera e a localização</Text>
         <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
-          <Text style={styles.permissionText}>Conceder Permissão</Text>
+          <Text style={styles.permissionText}>Conceder Permissão de Câmera</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.permissionButton} onPress={requestLocationPermission}>
+          <Text style={styles.permissionText}>Conceder Permissão de Localização</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.permissionButton, { marginTop: 10 }]}
@@ -363,7 +420,7 @@ export default function FacialRecognitionClockIn() {
                 styles.cameraFrame,
                 {
                   borderColor: isScanning ? borderColor : "#F4C542",
-                }
+                },
               ]}
             >
               <CameraView
@@ -375,7 +432,6 @@ export default function FacialRecognitionClockIn() {
                 zoom={0}
               />
               
-              {/* Animação de linha de scanning */}
               {isScanning && (
                 <Animated.View
                   style={[
@@ -387,7 +443,6 @@ export default function FacialRecognitionClockIn() {
                 />
               )}
               
-              {/* Cantos da moldura */}
               <View style={[styles.corner, styles.topLeft]} />
               <View style={[styles.corner, styles.topRight]} />
               <View style={[styles.corner, styles.bottomLeft]} />
@@ -395,7 +450,6 @@ export default function FacialRecognitionClockIn() {
             </Animated.View>
           </Animated.View>
           
-          {/* Status de scanning */}
           {isScanning && (
             <View style={styles.scanStatus}>
               <View style={styles.scanStatusDots}>
@@ -460,7 +514,6 @@ export default function FacialRecognitionClockIn() {
         )}
       </View>
 
-      {/* Modal de Sucesso Personalizado */}
       <CustomSuccessModal
         visible={showSuccessModal}
         onClose={handleCloseModal}
@@ -468,7 +521,6 @@ export default function FacialRecognitionClockIn() {
         clockInType={clockInType}
       />
 
-      {/* Modal de Erro Personalizado */}
       <CustomSuccessModal
         visible={showErrorModal}
         onClose={handleCloseErrorModal}
@@ -489,24 +541,6 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 24,
   },
-  message: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    textAlign: "center",
-    marginBottom: 10,
-  },
-  permissionButton: {
-    backgroundColor: "#F4C542",
-    padding: 10,
-    borderRadius: 8,
-    alignItems: "center",
-    marginTop: 5,
-  },
-  permissionText: {
-    color: "#0A1F44",
-    fontSize: 16,
-    fontWeight: "600",
-  },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -515,15 +549,15 @@ const styles = StyleSheet.create({
     paddingTop: 32,
     paddingBottom: 10,
   },
-  backButton: {
-    padding: 8,
-  },
   headerTitle: {
     color: "#F4C542",
     fontSize: 22,
     fontWeight: "bold",
     textAlign: "center",
     flex: 1,
+  },
+  backButton: {
+    padding: 8,
   },
   title: {
     fontSize: 24,
@@ -545,6 +579,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     borderWidth: 1,
     borderColor: "#1A2A4F",
+    alignItems: "center",
   },
   faceDetectedHeader: {
     flexDirection: "row",
@@ -567,23 +602,40 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 12,
     marginBottom: 3,
+    textAlign: "center",
   },
   scanArea: {
     alignItems: "center",
     marginBottom: 16,
   },
+  flipButton: {
+    alignSelf: "center",
+    marginBottom: 10,
+    backgroundColor: "#1A2A4F",
+    padding: 10,
+    borderRadius: 30,
+  },
   cameraContainer: {
     position: "relative",
     alignItems: "center",
+    width: width * 0.85,
+    height: width * 0.85,
+    borderRadius: 12,
+    overflow: "hidden",
   },
   cameraWrapper: {
     position: "relative",
+    width: width * 0.65,
+    height: width * 0.65,
+    borderRadius: 12,
+    overflow: "hidden",
   },
   cameraFrame: {
+    width: "100%",
+    height: "100%",
+    borderWidth: 4,
     borderRadius: 20,
-    borderWidth: 3,
     overflow: "hidden",
-    position: "relative",
     shadowColor: "#F4C542",
     shadowOffset: {
       width: 0,
@@ -594,8 +646,8 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   camera: {
-    width: width * 0.65,
-    height: width * 0.65,
+    width: "100%",
+    height: "100%",
     backgroundColor: "transparent",
   },
   scanLine: {
@@ -615,7 +667,6 @@ const styles = StyleSheet.create({
     width: 25,
     height: 25,
     borderColor: "#F4C542",
-    borderWidth: 3,
   },
   topLeft: {
     top: 15,
@@ -646,12 +697,17 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 5,
   },
   scanStatus: {
+    flexDirection: "row",
     alignItems: "center",
     marginTop: 12,
+    backgroundColor: "#142850",
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
   },
   scanStatusDots: {
     flexDirection: "row",
-    marginBottom: 8,
+    marginRight: 8,
   },
   dot: {
     width: 8,
@@ -664,18 +720,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
   },
-  flipButton: {
-    alignSelf: "center",
-    marginBottom: 10,
-    backgroundColor: "#1A2A4F",
-    padding: 10,
-    borderRadius: 30,
-  },
   instructionsContainer: {
     backgroundColor: "#142850",
     borderRadius: 12,
     padding: 12,
-    marginBottom: 16,
+    marginHorizontal: 18,
+    marginVertical: 10,
     borderWidth: 1,
     borderColor: "#1A2A4F",
   },
@@ -688,7 +738,7 @@ const styles = StyleSheet.create({
   instructionItem: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 6,
+    marginVertical: 4,
   },
   instructionText: {
     color: "#FFFFFF",
@@ -696,12 +746,14 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   buttonContainer: {
+    marginTop: 10,
     alignItems: "center",
   },
   clockInButtons: {
     flexDirection: "row",
-    width: "100%",
     justifyContent: "space-between",
+    width: width - 36,
+    marginHorizontal: 18,
     gap: 8,
   },
   compactButton: {
@@ -714,13 +766,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     minHeight: 70,
   },
-  compactButtonText: {
-    color: "#FFFFFF",
-    fontSize: 12,
-    fontWeight: "600",
-    marginTop: 4,
-    textAlign: "center",
-  },
   entradaButton: {
     backgroundColor: "#4CAF50",
   },
@@ -730,13 +775,20 @@ const styles = StyleSheet.create({
   saidaButton: {
     backgroundColor: "#F44336",
   },
+  compactButtonText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "600",
+    marginTop: 4,
+    textAlign: "center",
+  },
   scanningButton: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#142850",
-    borderRadius: 12,
     paddingVertical: 16,
     paddingHorizontal: 24,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: "#F4C542",
   },
@@ -746,7 +798,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginLeft: 8,
   },
-  
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.7)",
@@ -755,7 +806,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   modalContainer: {
-    backgroundColor: "#0A1F44E6", 
+    backgroundColor: "#0A1F44E6",
     borderRadius: 20,
     padding: 24,
     width: "100%",
@@ -790,6 +841,9 @@ const styles = StyleSheet.create({
     color: "#F4C542",
     textAlign: "center",
     fontWeight: "600",
+  },
+  errorSubtitle: {
+    color: "#F44336",
   },
   modalContent: {
     marginBottom: 24,
@@ -854,18 +908,36 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 5,
   },
+  errorButton: {
+    backgroundColor: "#F44336",
+  },
   modalButtonText: {
     color: "#0A1F44",
     fontSize: 18,
     fontWeight: "bold",
   },
-  errorSubtitle: {
-    color: "#F44336",
-  },
-  errorButton: {
-    backgroundColor: "#F44336",
-  },
   errorButtonText: {
     color: "#FFFFFF",
+  },
+  message: {
+    color: "#B0B3C7",
+    fontSize: 16,
+    textAlign: "center",
+    marginBottom: 20,
+    paddingHorizontal: 20,
+  },
+  permissionButton: {
+    backgroundColor: "#F4C542",
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    marginHorizontal: 18,
+    marginVertical: 5,
+  },
+  permissionText: {
+    color: "#0A1F44",
+    fontSize: 16,
+    fontWeight: "600",
+    textAlign: "center",
   },
 });

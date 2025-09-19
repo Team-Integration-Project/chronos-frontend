@@ -1,24 +1,24 @@
 import React, { useState, useEffect } from "react";
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TouchableOpacity, 
-  SafeAreaView, 
-  ScrollView, 
-  Dimensions, 
-  ActivityIndicator, 
-  Alert, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  SafeAreaView,
+  ScrollView,
+  Dimensions,
+  ActivityIndicator,
+  Alert,
   Platform,
   Modal,
-  FlatList
+  FlatList,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, router } from "expo-router";
 import api from "@/services/api";
-import * as Sharing from 'expo-sharing';
-import * as FileSystem from 'expo-file-system';
-import * as Print from 'expo-print';
+import * as Sharing from "expo-sharing";
+import * as FileSystem from "expo-file-system";
+import * as Print from "expo-print";
 
 const { width } = Dimensions.get("window");
 
@@ -31,17 +31,18 @@ export default function ReportIndividualScreen() {
   const [endDate, setEndDate] = useState<string | null>(null);
   const [attendances, setAttendances] = useState<any[]>([]);
   const [totalAttendances, setTotalAttendances] = useState(0);
-  const [stats, setStats] = useState({ 
-    horas_trabalhadas_total: 0, 
-    total_faltas: 0, 
-    total_atrasos: 0, 
-    total_justificativas: 0 
+  const [stats, setStats] = useState({
+    horas_trabalhadas_total: 0,
+    total_faltas: 0,
+    total_atrasos: 0,
+    total_justificativas: 0,
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [justifications, setJustifications] = useState<any[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [justificationsLoading, setJustificationsLoading] = useState(false);
+
   const getCurrentPeriodDates = () => {
     const today = new Date();
     let start: Date, end: Date;
@@ -77,8 +78,8 @@ export default function ReportIndividualScreen() {
 
     const formatDate = (date: Date) => {
       const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
       return `${year}-${month}-${day}`;
     };
 
@@ -90,25 +91,28 @@ export default function ReportIndividualScreen() {
       setJustificationsLoading(true);
       console.log(`Buscando justificativas para usuário ${userId} (${name})`);
       const response = await api.get("/justification/");
-      
+
       if (response.status === 200) {
         const allJustifications = response.data;
-        
-        const userJustifications = allJustifications.filter((item: any) => 
-          item.user === name || item.employee === name || item.user_id === userId ||
-          (item.user && item.user.toString() === name.toString()) ||
-          (item.employee && item.employee.toString() === name.toString())
+
+        const userJustifications = allJustifications.filter(
+          (item: any) =>
+            item.user === name ||
+            item.employee === name ||
+            item.user_id === userId ||
+            (item.user && item.user.toString() === name.toString()) ||
+            (item.employee && item.employee.toString() === name.toString())
         );
 
         const { start, end } = getCurrentPeriodDates();
-        
+
         const filteredJustifications = userJustifications.filter((item: any) => {
           const itemDate = item.date || (item.created_at ? item.created_at.split("T")[0] : null);
           if (!itemDate) return false;
-          
+
           return itemDate >= start && itemDate <= end;
         });
-        
+
         const formattedJustifications = filteredJustifications.map((item: any) => ({
           id: item.id ? item.id.toString() : "N/A",
           reason: item.reason || "Sem motivo",
@@ -116,7 +120,7 @@ export default function ReportIndividualScreen() {
           status: mapJustificationStatus(item),
           details: item.reason || item.details || "Sem detalhes",
         }));
-        
+
         setJustifications(formattedJustifications);
         console.log("Justificativas filtradas do usuário:", formattedJustifications);
       }
@@ -129,9 +133,9 @@ export default function ReportIndividualScreen() {
   };
 
   const mapJustificationStatus = (item: any) => {
-    if (item.status === 'aprovada' || item.status === 'approved') {
+    if (item.status === "aprovada" || item.status === "approved") {
       return "aprovada";
-    } else if (item.status === 'recusada' || item.status === 'rejected') {
+    } else if (item.status === "recusada" || item.status === "rejected") {
       return "recusada";
     } else if (item.approval === true || item.approved === true) {
       return "aprovada";
@@ -153,19 +157,27 @@ export default function ReportIndividualScreen() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "aprovada": return "#4BB543";
-      case "recusada": return "#FF6B6B";
-      case "pendente": return "#F4C542";
-      default: return "#B0B3C7";
+      case "aprovada":
+        return "#4BB543";
+      case "recusada":
+        return "#FF6B6B";
+      case "pendente":
+        return "#F4C542";
+      default:
+        return "#B0B3C7";
     }
   };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case "aprovada": return "checkmark-circle";
-      case "recusada": return "close-circle";
-      case "pendente": return "time-outline";
-      default: return "help-circle-outline";
+      case "aprovada":
+        return "checkmark-circle";
+      case "recusada":
+        return "close-circle";
+      case "pendente":
+        return "time-outline";
+      default:
+        return "help-circle-outline";
     }
   };
 
@@ -173,10 +185,10 @@ export default function ReportIndividualScreen() {
     const fetchUserAttendance = async () => {
       try {
         setLoading(true);
-        setError(null); 
-        
+        setError(null);
+
         console.log(`Buscando dados para usuário ${userId} com período ${period}`);
-        
+
         let apiUrl = `/attendance/${userId}/`;
         const queryParams = [];
 
@@ -186,8 +198,8 @@ export default function ReportIndividualScreen() {
         } else if (period === "hoje") {
           const today = new Date();
           const year = today.getFullYear();
-          const month = String(today.getMonth() + 1).padStart(2, '0');
-          const day = String(today.getDate()).padStart(2, '0');
+          const month = String(today.getMonth() + 1).padStart(2, "0");
+          const day = String(today.getDate()).padStart(2, "0");
           const formattedDate = `${year}-${month}-${day}`;
           queryParams.push(`start_date=${formattedDate}`);
           queryParams.push(`end_date=${formattedDate}`);
@@ -196,44 +208,43 @@ export default function ReportIndividualScreen() {
         }
 
         if (queryParams.length > 0) {
-          apiUrl += `?${queryParams.join('&')}`;
+          apiUrl += `?${queryParams.join("&")}`;
         }
 
         const response = await api.get(apiUrl);
-        console.log('Resposta da API:', response.data);
-        
+        console.log("Resposta da API:", response.data);
+
         const { attendances: data, total_attendances, stats: newStats } = response.data;
-        
+
         if (data) {
           setAttendances(data);
         } else {
-          console.warn('Dados de attendances não encontrados na resposta');
+          console.warn("Dados de attendances não encontrados na resposta");
           setAttendances([]);
         }
-        
+
         if (total_attendances !== undefined) {
           setTotalAttendances(total_attendances);
         } else {
           setTotalAttendances(0);
         }
-        
-        if (newStats && typeof newStats === 'object') {
+
+        if (newStats && typeof newStats === "object") {
           const updatedStats = {
             horas_trabalhadas_total: newStats.horas_trabalhadas_total || 0,
             total_faltas: newStats.total_faltas || 0,
             total_atrasos: newStats.total_atrasos || 0,
-            total_justificativas: newStats.total_justificativas || 0
+            total_justificativas: newStats.total_justificativas || 0,
           };
           setStats(updatedStats);
-          console.log('Stats atualizadas:', updatedStats);
+          console.log("Stats atualizadas:", updatedStats);
         } else {
-          console.warn('Stats não encontradas na resposta, usando valores padrão');
+          console.warn("Stats não encontradas na resposta, usando valores padrão");
           setStats({ horas_trabalhadas_total: 0, total_faltas: 0, total_atrasos: 0, total_justificativas: 0 });
         }
-        
       } catch (error: any) {
         console.error("Erro ao buscar atendimentos:", error);
-        
+
         let errorMessage = "Falha ao carregar os atendimentos. Tente novamente.";
         if (error.response?.status === 404) {
           errorMessage = "Usuário não encontrado.";
@@ -242,7 +253,7 @@ export default function ReportIndividualScreen() {
         } else if (error.message) {
           errorMessage = error.message;
         }
-        
+
         setError(errorMessage);
       } finally {
         setLoading(false);
@@ -252,8 +263,8 @@ export default function ReportIndividualScreen() {
     if (userId) {
       fetchUserAttendance();
     } else {
-      console.error('UserId não fornecido');
-      setError('ID do usuário não encontrado');
+      console.error("UserId não fornecido");
+      setError("ID do usuário não encontrado");
       setLoading(false);
     }
   }, [userId, period, startDate, endDate]);
@@ -262,9 +273,9 @@ export default function ReportIndividualScreen() {
     setLoading(true);
     try {
       const userName = Array.isArray(name) ? name[0] : name;
-      const currentDate = new Date().toLocaleDateString('pt-BR');
-      const currentTime = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-      
+      const currentDate = new Date().toLocaleDateString("pt-BR");
+      const currentTime = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+
       const htmlContent = `
         <!DOCTYPE html>
         <html>
@@ -285,7 +296,7 @@ export default function ReportIndividualScreen() {
             }
             
             .container {
-              max-width: 800px;
+              max-width: 1000px;
               margin: 0 auto;
               padding: 40px;
               background: white;
@@ -488,7 +499,9 @@ export default function ReportIndividualScreen() {
 
             <div class="table-section">
               <h2 class="table-title">Registros de Ponto</h2>
-              ${attendances.length > 0 ? `
+              ${
+                attendances.length > 0
+                  ? `
                 <table>
                   <thead>
                     <tr>
@@ -496,24 +509,38 @@ export default function ReportIndividualScreen() {
                       <th>Entrada</th>
                       <th>Almoço</th>
                       <th>Saída</th>
+                      <th>Latitude</th>
+                      <th>Longitude</th>
+                      <th>Local Válido</th>
+                      <th>Distância (m)</th>
                     </tr>
                   </thead>
                   <tbody>
-                    ${attendances.map(r => `
+                    ${attendances
+                      .map(
+                        (r) => `
                       <tr>
-                        <td><strong>${r.date || '—'}</strong></td>
-                        <td>${r.entrada || '—'}</td>
-                        <td>${r.entrada_almoco || '—'}</td>
-                        <td>${r.saida || '—'}</td>
+                        <td><strong>${r.date || "—"}</strong></td>
+                        <td>${r.entrada || "—"}</td>
+                        <td>${r.entrada_almoco || "—"}</td>
+                        <td>${r.saida || "—"}</td>
+                        <td>${r.latitude ? r.latitude.toFixed(6) : "—"}</td>
+                        <td>${r.longitude ? r.longitude.toFixed(6) : "—"}</td>
+                        <td>${r.is_valid_location ? "Sim" : r.is_valid_location === false ? "Não" : "—"}</td>
+                        <td>${r.distance_from_workplace_meters ? r.distance_from_workplace_meters.toFixed(2) : "—"}</td>
                       </tr>
-                    `).join('')}
+                    `
+                      )
+                      .join("")}
                   </tbody>
                 </table>
-              ` : `
+              `
+                  : `
                 <div class="no-data">
                   📅 Nenhum registro de ponto encontrado para o período selecionado
                 </div>
-              `}
+              `
+              }
             </div>
 
             <div class="footer">
@@ -527,37 +554,40 @@ export default function ReportIndividualScreen() {
         </html>
       `;
 
-      const fileName = `Relatorio_Ponto_${userName.replace(/\s/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+      const fileName = `Relatorio_Ponto_${userName.replace(/\s/g, "_")}_${new Date().toISOString().split("T")[0]}.pdf`;
 
-      if (Platform.OS === 'android') {
+      if (Platform.OS === "android") {
         const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
         if (permissions.granted) {
           const uri = await FileSystem.StorageAccessFramework.createFileAsync(
             permissions.directoryUri,
             fileName,
-            'application/pdf'
+            "application/pdf"
           );
-          const { uri: tempUri } = await Print.printToFileAsync({ 
+          const { uri: tempUri } = await Print.printToFileAsync({
             html: htmlContent,
-            base64: false
+            base64: false,
           });
-          const fileContent = await FileSystem.readAsStringAsync(tempUri, { encoding: FileSystem.EncodingType.Base64 });
-          await FileSystem.writeAsStringAsync(uri, fileContent, { encoding: FileSystem.EncodingType.Base64 });
+          const fileContent = await FileSystem.readAsStringAsync(tempUri, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+          await FileSystem.writeAsStringAsync(uri, fileContent, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
           Alert.alert("Sucesso", `PDF salvo com sucesso! Você pode acessá-lo usando um gerenciador de arquivos.`);
         } else {
           Alert.alert("Erro", "Permissão negada para acessar o diretório.");
         }
       } else {
-        const { uri } = await Print.printToFileAsync({ 
+        const { uri } = await Print.printToFileAsync({
           html: htmlContent,
-          base64: false
+          base64: false,
         });
         await Sharing.shareAsync(uri);
         Alert.alert("Sucesso", "PDF gerado com sucesso e pronto para salvar ou compartilhar!");
       }
-
     } catch (error) {
-      console.error('Erro ao gerar PDF:', error);
+      console.error("Erro ao gerar PDF:", error);
       Alert.alert("Erro", "Não foi possível gerar o PDF. Tente novamente.");
     } finally {
       setLoading(false);
@@ -568,20 +598,25 @@ export default function ReportIndividualScreen() {
     setLoading(true);
     try {
       const userName = Array.isArray(name) ? name[0] : name;
-      let csvContent = "Data,Entrada,Saida_Almoco,Entrada_Almoco,Saida\n";
-      attendances.forEach(r => {
-        csvContent += `${r.date || ''},${r.entrada || ''},${r.saida_almoco || ''},${r.entrada_almoco || ''},${r.saida || ''}\n`;
+      let csvContent =
+        "Data,Entrada,Saida_Almoco,Entrada_Almoco,Saida,Latitude,Longitude,Local Valido,Distancia (m)\n";
+      attendances.forEach((r) => {
+        csvContent += `${r.date || ""},${r.entrada || ""},${r.saida_almoco || ""},${r.entrada_almoco || ""},${
+          r.saida || ""
+        },${r.latitude ? r.latitude.toFixed(6) : ""},${r.longitude ? r.longitude.toFixed(6) : ""},${
+          r.is_valid_location ? "Sim" : r.is_valid_location === false ? "Não" : ""
+        },${r.distance_from_workplace_meters ? r.distance_from_workplace_meters.toFixed(2) : ""}\n`;
       });
 
-      const fileName = `Relatorio_Ponto_${userName.replace(/\s/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`;
+      const fileName = `Relatorio_Ponto_${userName.replace(/\s/g, "_")}_${new Date().toISOString().split("T")[0]}.csv`;
 
-      if (Platform.OS === 'android') {
+      if (Platform.OS === "android") {
         const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
         if (permissions.granted) {
           const uri = await FileSystem.StorageAccessFramework.createFileAsync(
             permissions.directoryUri,
             fileName,
-            'text/csv'
+            "text/csv"
           );
           await FileSystem.writeAsStringAsync(uri, csvContent);
           Alert.alert("Sucesso", `CSV salvo com sucesso! Você pode acessá-lo usando um gerenciador de arquivos.`);
@@ -594,9 +629,8 @@ export default function ReportIndividualScreen() {
         await Sharing.shareAsync(tempPath);
         Alert.alert("Sucesso", "CSV gerado com sucesso e pronto para salvar ou compartilhar!");
       }
-
     } catch (error) {
-      console.error('Erro ao gerar CSV:', error);
+      console.error("Erro ao gerar CSV:", error);
       Alert.alert("Erro", "Não foi possível gerar o CSV. Tente novamente.");
     } finally {
       setLoading(false);
@@ -627,8 +661,8 @@ export default function ReportIndividualScreen() {
         <View style={styles.loadingContainer}>
           <Ionicons name="alert-circle-outline" size={48} color="#FF6B6B" />
           <Text style={styles.emptyText}>{error}</Text>
-          <TouchableOpacity 
-            style={styles.retryBtn} 
+          <TouchableOpacity
+            style={styles.retryBtn}
             onPress={() => {
               setError(null);
               setLoading(true);
@@ -651,56 +685,88 @@ export default function ReportIndividualScreen() {
           <Text style={styles.header}>{name}</Text>
           <View style={{ width: 40 }} />
         </View>
-        
+
         <View style={styles.summaryRow}>
-          <SummaryCard 
-            label="Horas" 
-            value={stats.horas_trabalhadas_total || 0} 
-            color="#4CAF50" 
-            icon="time-outline" 
+          <SummaryCard
+            label="Horas"
+            value={stats.horas_trabalhadas_total || 0}
+            color="#4CAF50"
+            icon="time-outline"
             suffix="h"
             subtitle="total acumulado"
           />
-          <SummaryCard 
-            label="Faltas" 
-            value={stats.total_faltas || 0} 
-            color="#FF6B6B" 
-            icon="close-circle-outline" 
+          <SummaryCard
+            label="Faltas"
+            value={stats.total_faltas || 0}
+            color="#FF6B6B"
+            icon="close-circle-outline"
             subtitle="total geral"
           />
-          <SummaryCard 
-            label="Atrasos" 
-            value={stats.total_atrasos || 0} 
-            color="#FF9800" 
-            icon="alert-circle-outline" 
+          <SummaryCard
+            label="Atrasos"
+            value={stats.total_atrasos || 0}
+            color="#FF9800"
+            icon="alert-circle-outline"
             subtitle="após 07:00"
           />
-          <SummaryCard 
-            label="Justificativa" 
-            value={stats.total_justificativas || 0} 
-            color="#2196F3" 
-            icon="document-text-outline" 
+          <SummaryCard
+            label="Justificativa"
+            value={stats.total_justificativas || 0}
+            color="#2196F3"
+            icon="document-text-outline"
             subtitle="total enviadas"
             onPress={openJustificationsModal}
             isClickable={true}
           />
         </View>
-        
+
         <View style={styles.filtersSection}>
           <Text style={styles.filterLabel}>Filtrar visualização da tabela:</Text>
           <View style={styles.filterRow}>
-            <FilterBtn label="Hoje" active={period === "hoje" && !startDate} onPress={() => { setPeriod("hoje"); setStartDate(null); setEndDate(null); }} />
-            <FilterBtn label="Semana" active={period === "semana" && !startDate} onPress={() => { setPeriod("semana"); setStartDate(null); setEndDate(null); }} />
-            <FilterBtn label="Mês" active={period === "mes" && !startDate} onPress={() => { setPeriod("mes"); setStartDate(null); setEndDate(null); }} />
-            <FilterBtn label="Ano" active={period === "ano" && !startDate} onPress={() => { setPeriod("ano"); setStartDate(null); setEndDate(null); }} />
+            <FilterBtn
+              label="Hoje"
+              active={period === "hoje" && !startDate}
+              onPress={() => {
+                setPeriod("hoje");
+                setStartDate(null);
+                setEndDate(null);
+              }}
+            />
+            <FilterBtn
+              label="Semana"
+              active={period === "semana" && !startDate}
+              onPress={() => {
+                setPeriod("semana");
+                setStartDate(null);
+                setEndDate(null);
+              }}
+            />
+            <FilterBtn
+              label="Mês"
+              active={period === "mes" && !startDate}
+              onPress={() => {
+                setPeriod("mes");
+                setStartDate(null);
+                setEndDate(null);
+              }}
+            />
+            <FilterBtn
+              label="Ano"
+              active={period === "ano" && !startDate}
+              onPress={() => {
+                setPeriod("ano");
+                setStartDate(null);
+                setEndDate(null);
+              }}
+            />
           </View>
         </View>
-        
+
         {attendances && attendances.length > 0 ? (
-          <ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={true} 
-            style={{ marginHorizontal: 12, marginTop: 10 }} 
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={true}
+            style={{ marginHorizontal: 12, marginTop: 10 }}
             contentContainerStyle={styles.contentContainer}
           >
             <View style={styles.tableSection}>
@@ -709,13 +775,25 @@ export default function ReportIndividualScreen() {
                 <Text style={[styles.tableCell, { minWidth: 90 }]}>Entrada</Text>
                 <Text style={[styles.tableCell, { minWidth: 110 }]}>Almoço</Text>
                 <Text style={[styles.tableCell, { minWidth: 90 }]}>Saída</Text>
+                <Text style={[styles.tableCell, { minWidth: 100 }]}>Latitude</Text>
+                <Text style={[styles.tableCell, { minWidth: 100 }]}>Longitude</Text>
+                <Text style={[styles.tableCell, { minWidth: 80 }]}>Local Válido</Text>
+                <Text style={[styles.tableCell, { minWidth: 80 }]}>Distância (m)</Text>
               </View>
               {attendances.map((r, idx) => (
                 <View key={r.id || idx} style={[styles.tableRow, idx % 2 === 0 && styles.tableRowAlt]}>
-                  <Text style={[styles.tableCell, { minWidth: 100 }]}>{r.date || '—'}</Text>
-                  <Text style={[styles.tableCell, { minWidth: 90 }]}>{r.entrada || '—'}</Text>
-                  <Text style={[styles.tableCell, { minWidth: 110 }]}>{r.entrada_almoco || '—'}</Text>
-                  <Text style={[styles.tableCell, { minWidth: 90 }]}>{r.saida || '—'}</Text>
+                  <Text style={[styles.tableCell, { minWidth: 100 }]}>{r.date || "—"}</Text>
+                  <Text style={[styles.tableCell, { minWidth: 90 }]}>{r.entrada || "—"}</Text>
+                  <Text style={[styles.tableCell, { minWidth: 110 }]}>{r.entrada_almoco || "—"}</Text>
+                  <Text style={[styles.tableCell, { minWidth: 90 }]}>{r.saida || "—"}</Text>
+                  <Text style={[styles.tableCell, { minWidth: 100 }]}>{r.latitude ? r.latitude.toFixed(6) : "—"}</Text>
+                  <Text style={[styles.tableCell, { minWidth: 100 }]}>{r.longitude ? r.longitude.toFixed(6) : "—"}</Text>
+                  <Text style={[styles.tableCell, { minWidth: 80 }]}>
+                    {r.is_valid_location ? "Sim" : r.is_valid_location === false ? "Não" : "—"}
+                  </Text>
+                  <Text style={[styles.tableCell, { minWidth: 80 }]}>
+                    {r.distance_from_workplace_meters ? r.distance_from_workplace_meters.toFixed(2) : "—"}
+                  </Text>
                 </View>
               ))}
             </View>
@@ -728,7 +806,7 @@ export default function ReportIndividualScreen() {
             </Text>
           </View>
         )}
-        
+
         <View style={styles.downloadSection}>
           <DownloadBtn label="Gerar PDF" icon="document-outline" color="#F4C542" onPress={generatePdf} />
           <DownloadBtn label="Gerar Excel" icon="grid-outline" color="#4CAF50" onPress={generateCsv} />
@@ -792,20 +870,29 @@ export default function ReportIndividualScreen() {
   );
 }
 
-type SummaryCardProps = { 
-  label: string; 
-  value: number; 
-  color: string; 
-  icon: any; 
-  suffix?: string; 
+type SummaryCardProps = {
+  label: string;
+  value: number;
+  color: string;
+  icon: any;
+  suffix?: string;
   subtitle?: string;
   onPress?: () => void;
   isClickable?: boolean;
 };
 
-function SummaryCard({ label, value, color, icon, suffix = "", subtitle, onPress, isClickable = false }: SummaryCardProps) {
-  const displayValue = typeof value === 'number' ? value : 0;
-  
+function SummaryCard({
+  label,
+  value,
+  color,
+  icon,
+  suffix = "",
+  subtitle,
+  onPress,
+  isClickable = false,
+}: SummaryCardProps) {
+  const displayValue = typeof value === "number" ? value : 0;
+
   let formattedValue: string;
   let currentSuffix = suffix;
 
@@ -813,31 +900,28 @@ function SummaryCard({ label, value, color, icon, suffix = "", subtitle, onPress
     const totalMinutes = Math.round(displayValue * 60);
     const hours = Math.floor(totalMinutes / 60);
     const minutes = totalMinutes % 60;
-    formattedValue = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
-    currentSuffix = ""; 
+    formattedValue = `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+    currentSuffix = "";
   } else {
     formattedValue = displayValue.toString();
   }
-  
+
   const CardComponent = isClickable ? TouchableOpacity : View;
-  
+
   return (
-    <CardComponent 
-      style={[styles.summaryCard, { borderColor: color }, isClickable && styles.clickableCard]} 
+    <CardComponent
+      style={[styles.summaryCard, { borderColor: color }, isClickable && styles.clickableCard]}
       onPress={onPress}
       activeOpacity={isClickable ? 0.7 : 1}
     >
       <Ionicons name={icon} size={22} color={color} style={{ marginBottom: 4 }} />
       <Text style={styles.summaryValue}>
-        {formattedValue}{currentSuffix}
+        {formattedValue}
+        {currentSuffix}
       </Text>
       <Text style={styles.summaryLabel}>{label}</Text>
-      {subtitle && (
-        <Text style={styles.summarySubtitle}>{subtitle}</Text>
-      )}
-      {isClickable && (
-        <Ionicons name="eye-outline" size={16} color="#B0B3C7" style={{ marginTop: 4 }} />
-      )}
+      {subtitle && <Text style={styles.summarySubtitle}>{subtitle}</Text>}
+      {isClickable && <Ionicons name="eye-outline" size={16} color="#B0B3C7" style={{ marginTop: 4 }} />}
     </CardComponent>
   );
 }
@@ -858,7 +942,11 @@ function FilterBtn({ label, active, onPress }: FilterBtnProps) {
 type DownloadBtnProps = { label: string; color: string; icon: any; onPress: () => void };
 function DownloadBtn({ label, color, icon, onPress }: DownloadBtnProps) {
   return (
-    <TouchableOpacity style={[styles.downloadBtn, { backgroundColor: color }]} onPress={onPress} activeOpacity={0.85}>
+    <TouchableOpacity
+      style={[styles.downloadBtn, { backgroundColor: color }]}
+      onPress={onPress}
+      activeOpacity={0.85}
+    >
       {icon && <Ionicons name={icon} size={20} color="#0A1F44" style={{ marginRight: 8 }} />}
       <Text style={styles.downloadBtnText}>{label}</Text>
     </TouchableOpacity>
@@ -902,7 +990,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 6,
     flex: 1,
-    width: (width - 46) / 4, 
+    width: (width - 46) / 4,
     backgroundColor: "#142850",
     minHeight: 95,
   },
@@ -915,18 +1003,18 @@ const styles = StyleSheet.create({
   summaryValue: {
     color: "#F4C542",
     fontWeight: "bold",
-    fontSize: 15, 
+    fontSize: 15,
     marginBottom: 2,
   },
   summaryLabel: {
     color: "#B0B3C7",
-    fontSize: 11, 
+    fontSize: 11,
     textAlign: "center",
     fontWeight: "600",
   },
   summarySubtitle: {
     color: "#8A8FA3",
-    fontSize: 9, 
+    fontSize: 9,
     textAlign: "center",
     marginTop: 2,
     fontStyle: "italic",
