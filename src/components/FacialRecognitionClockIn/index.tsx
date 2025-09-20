@@ -375,32 +375,6 @@ export default function FacialRecognitionClockIn() {
       <Text style={styles.title}>Reconhecimento Facial</Text>
       <Text style={styles.subtitle}>Posicione seu rosto na área indicada</Text>
 
-      {faceDetected && employeeData ? (
-        <View style={styles.userInfoContainer}>
-          <View style={styles.faceDetectedHeader}>
-            <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
-            <Text style={styles.faceDetectedText}>Rosto Detectado</Text>
-          </View>
-          <Text style={styles.userInfoTitle}>Funcionário Reconhecido</Text>
-          <Text style={styles.userInfoText}>Ponto registrado com sucesso!</Text>
-        </View>
-      ) : (
-        <View style={styles.userInfoContainer}>
-          <Text style={styles.userInfoTitle}>
-            {isScanning ? "Processando..." : "Aguardando Detecção:"}
-          </Text>
-          <Text style={styles.userInfoText}>
-            {isScanning 
-              ? `Reconhecendo rosto para ${clockInType === "entrada" ? "entrada" : clockInType === "saida" ? "saída" : "almoço"}...` 
-              : "Posicione seu rosto na área da câmera"
-            }
-          </Text>
-          {!isScanning && (
-            <Text style={styles.userInfoText}>Selecione uma opção abaixo para iniciar</Text>
-          )}
-        </View>
-      )}
-
       <View style={styles.scanArea}>
         <TouchableOpacity style={styles.flipButton} onPress={handleToggleCamera}>
           <Ionicons name="camera-reverse-outline" size={24} color="#F4C542" />
@@ -570,7 +544,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#B0B3C7",
     textAlign: "center",
-    marginBottom: 12,
+    marginBottom: 4,
   },
   userInfoContainer: {
     backgroundColor: "#142850",
@@ -606,11 +580,11 @@ const styles = StyleSheet.create({
   },
   scanArea: {
     alignItems: "center",
-    marginBottom: 16,
+    marginBottom: 4,
   },
   flipButton: {
     alignSelf: "center",
-    marginBottom: 10,
+    marginBottom: 8,
     backgroundColor: "#1A2A4F",
     padding: 10,
     borderRadius: 30,
@@ -622,6 +596,7 @@ const styles = StyleSheet.create({
     height: width * 0.85,
     borderRadius: 12,
     overflow: "hidden",
+    marginBottom: 4,
   },
   cameraWrapper: {
     position: "relative",
@@ -699,7 +674,7 @@ const styles = StyleSheet.create({
   scanStatus: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 12,
+    marginTop: 8,
     backgroundColor: "#142850",
     paddingVertical: 8,
     paddingHorizontal: 16,
@@ -725,7 +700,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 12,
     marginHorizontal: 18,
-    marginVertical: 10,
+    marginVertical: 4,
     borderWidth: 1,
     borderColor: "#1A2A4F",
   },
@@ -733,12 +708,12 @@ const styles = StyleSheet.create({
     color: "#F4C542",
     fontSize: 14,
     fontWeight: "600",
-    marginBottom: 8,
+    marginBottom: 6,
   },
   instructionItem: {
     flexDirection: "row",
     alignItems: "center",
-    marginVertical: 4,
+    marginVertical: 3,
   },
   instructionText: {
     color: "#FFFFFF",
@@ -746,7 +721,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   buttonContainer: {
-    marginTop: 10,
+    marginTop: 8,
     alignItems: "center",
   },
   clockInButtons: {

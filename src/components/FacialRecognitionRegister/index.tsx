@@ -362,7 +362,7 @@ export default function FacialRecognitionRegister() {
 
   const scanLineTranslateY = scanAnimation.interpolate({
     inputRange: [0, 1],
-    outputRange: [0, width * 0.6 - 4],
+    outputRange: [0, width * 0.65 - 4],
   });
 
   const borderColor = borderAnimation.interpolate({
@@ -409,6 +409,7 @@ export default function FacialRecognitionRegister() {
         <TouchableOpacity style={styles.flipButton} onPress={handleToggleCamera}>
           <Ionicons name="camera-reverse-outline" size={24} color="#F4C542" />
         </TouchableOpacity>
+        
         <View style={styles.cameraContainer}>
           <Animated.View
             style={[
@@ -418,22 +419,23 @@ export default function FacialRecognitionRegister() {
               },
             ]}
           >
-            <Animated.View
+            <Animated.View 
               style={[
                 styles.cameraFrame,
                 {
                   borderColor: isScanning ? borderColor : "#F4C542",
-                }
+                },
               ]}
             >
               <CameraView
                 ref={cameraRef}
                 style={styles.camera}
                 facing={cameraType}
-                ratio="4:3"
+                ratio="1:1"
+                mode="picture"
+                zoom={0}
               />
-
-              {/* Animação de linha de scanning */}
+              
               {isScanning && (
                 <Animated.View
                   style={[
@@ -444,16 +446,14 @@ export default function FacialRecognitionRegister() {
                   ]}
                 />
               )}
-
-              {/* Cantos da moldura */}
+              
               <View style={[styles.corner, styles.topLeft]} />
               <View style={[styles.corner, styles.topRight]} />
               <View style={[styles.corner, styles.bottomLeft]} />
               <View style={[styles.corner, styles.bottomRight]} />
             </Animated.View>
           </Animated.View>
-
-          {/* Status de scanning */}
+          
           {isScanning && (
             <View style={styles.scanStatus}>
               <View style={styles.scanStatusDots}>
@@ -614,22 +614,43 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 16,
   },
+  flipButton: {
+    alignSelf: "center",
+    marginBottom: 10,
+    backgroundColor: "#1A2A4F",
+    padding: 10,
+    borderRadius: 30,
+  },
   cameraContainer: {
     position: "relative",
     alignItems: "center",
   },
   cameraWrapper: {
     position: "relative",
+    width: width * 0.65,
+    height: width * 0.65,
+    borderRadius: 12,
+    overflow: "hidden",
   },
   cameraFrame: {
-    borderRadius: 16,
-    borderWidth: 3,
+    width: "100%",
+    height: "100%",
+    borderWidth: 4,
+    borderRadius: 20,
     overflow: "hidden",
-    position: "relative",
+    shadowColor: "#F4C542",
+    shadowOffset: {
+      width: 0,
+      height: 0,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 8,
   },
   camera: {
-    width: width * 0.8,
-    height: width * 0.6,
+    width: "100%",
+    height: "100%",
+    backgroundColor: "transparent",
   },
   scanLine: {
     position: "absolute",
@@ -645,41 +666,50 @@ const styles = StyleSheet.create({
   },
   corner: {
     position: "absolute",
-    width: 20,
-    height: 20,
+    width: 25,
+    height: 25,
     borderColor: "#F4C542",
   },
   topLeft: {
-    top: 10,
-    left: 10,
+    top: 15,
+    left: 15,
     borderTopWidth: 3,
     borderLeftWidth: 3,
+    borderTopLeftRadius: 5,
   },
   topRight: {
-    top: 10,
-    right: 10,
+    top: 15,
+    right: 15,
     borderTopWidth: 3,
     borderRightWidth: 3,
+    borderTopRightRadius: 5,
   },
   bottomLeft: {
-    bottom: 10,
-    left: 10,
+    bottom: 15,
+    left: 15,
     borderBottomWidth: 3,
     borderLeftWidth: 3,
+    borderBottomLeftRadius: 5,
   },
   bottomRight: {
-    bottom: 10,
-    right: 10,
+    bottom: 15,
+    right: 15,
     borderBottomWidth: 3,
     borderRightWidth: 3,
+    borderBottomRightRadius: 5,
   },
   scanStatus: {
+    flexDirection: "row",
     alignItems: "center",
     marginTop: 12,
+    backgroundColor: "#142850",
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
   },
   scanStatusDots: {
     flexDirection: "row",
-    marginBottom: 8,
+    marginRight: 8,
   },
   dot: {
     width: 8,
@@ -691,13 +721,6 @@ const styles = StyleSheet.create({
     color: "#F4C542",
     fontSize: 14,
     fontWeight: "600",
-  },
-  flipButton: {
-    alignSelf: "center",
-    marginBottom: 10,
-    backgroundColor: "#1A2A4F",
-    padding: 10,
-    borderRadius: 30,
   },
   instructionsContainer: {
     backgroundColor: "#142850",
@@ -746,8 +769,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginLeft: 8,
   },
-  
-  
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.7)",
