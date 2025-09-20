@@ -43,6 +43,14 @@ export default function ReportIndividualScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [justificationsLoading, setJustificationsLoading] = useState(false);
 
+  // Função para converter horas decimais para HH:MM
+  const formatDecimalToHours = (decimalHours: number) => {
+    const totalMinutes = Math.round(decimalHours * 60);
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+  };
+
   const getCurrentPeriodDates = () => {
     const today = new Date();
     let start: Date, end: Date;
@@ -276,6 +284,9 @@ export default function ReportIndividualScreen() {
       const currentDate = new Date().toLocaleDateString("pt-BR");
       const currentTime = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 
+      // Converter horas trabalhadas para formato HH:MM
+      const formattedHours = formatDecimalToHours(stats.horas_trabalhadas_total);
+
       const htmlContent = `
         <!DOCTYPE html>
         <html>
@@ -480,7 +491,7 @@ export default function ReportIndividualScreen() {
 
             <div class="stats-grid">
               <div class="stat-card hours">
-                <div class="stat-value">${stats.horas_trabalhadas_total.toFixed(1)}h</div>
+                <div class="stat-value">${formattedHours}</div>
                 <div class="stat-label">Horas Trabalhadas</div>
               </div>
               <div class="stat-card absences">
@@ -509,10 +520,6 @@ export default function ReportIndividualScreen() {
                       <th>Entrada</th>
                       <th>Almoço</th>
                       <th>Saída</th>
-                      <th>Latitude</th>
-                      <th>Longitude</th>
-                      <th>Local Válido</th>
-                      <th>Distância (m)</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -524,10 +531,6 @@ export default function ReportIndividualScreen() {
                         <td>${r.entrada || "—"}</td>
                         <td>${r.entrada_almoco || "—"}</td>
                         <td>${r.saida || "—"}</td>
-                        <td>${r.latitude ? r.latitude.toFixed(6) : "—"}</td>
-                        <td>${r.longitude ? r.longitude.toFixed(6) : "—"}</td>
-                        <td>${r.is_valid_location ? "Sim" : r.is_valid_location === false ? "Não" : "—"}</td>
-                        <td>${r.distance_from_workplace_meters ? r.distance_from_workplace_meters.toFixed(2) : "—"}</td>
                       </tr>
                     `
                       )
@@ -598,14 +601,13 @@ export default function ReportIndividualScreen() {
     setLoading(true);
     try {
       const userName = Array.isArray(name) ? name[0] : name;
-      let csvContent =
-        "Data,Entrada,Saida_Almoco,Entrada_Almoco,Saida,Latitude,Longitude,Local Valido,Distancia (m)\n";
+      
+      // Cabeçalho do CSV sem as colunas removidas
+      let csvContent = "Data,Entrada,Saida_Almoco,Entrada_Almoco,Saida\n";
+      
+      // Adicionar dados das linhas
       attendances.forEach((r) => {
-        csvContent += `${r.date || ""},${r.entrada || ""},${r.saida_almoco || ""},${r.entrada_almoco || ""},${
-          r.saida || ""
-        },${r.latitude ? r.latitude.toFixed(6) : ""},${r.longitude ? r.longitude.toFixed(6) : ""},${
-          r.is_valid_location ? "Sim" : r.is_valid_location === false ? "Não" : ""
-        },${r.distance_from_workplace_meters ? r.distance_from_workplace_meters.toFixed(2) : ""}\n`;
+        csvContent += `${r.date || ""},${r.entrada || ""},${r.saida_almoco || ""},${r.entrada_almoco || ""},${r.saida || ""}\n`;
       });
 
       const fileName = `Relatorio_Ponto_${userName.replace(/\s/g, "_")}_${new Date().toISOString().split("T")[0]}.csv`;
@@ -775,10 +777,6 @@ export default function ReportIndividualScreen() {
                 <Text style={[styles.tableCell, { minWidth: 90 }]}>Entrada</Text>
                 <Text style={[styles.tableCell, { minWidth: 110 }]}>Almoço</Text>
                 <Text style={[styles.tableCell, { minWidth: 90 }]}>Saída</Text>
-                <Text style={[styles.tableCell, { minWidth: 100 }]}>Latitude</Text>
-                <Text style={[styles.tableCell, { minWidth: 100 }]}>Longitude</Text>
-                <Text style={[styles.tableCell, { minWidth: 80 }]}>Local Válido</Text>
-                <Text style={[styles.tableCell, { minWidth: 80 }]}>Distância (m)</Text>
               </View>
               {attendances.map((r, idx) => (
                 <View key={r.id || idx} style={[styles.tableRow, idx % 2 === 0 && styles.tableRowAlt]}>
@@ -786,14 +784,6 @@ export default function ReportIndividualScreen() {
                   <Text style={[styles.tableCell, { minWidth: 90 }]}>{r.entrada || "—"}</Text>
                   <Text style={[styles.tableCell, { minWidth: 110 }]}>{r.entrada_almoco || "—"}</Text>
                   <Text style={[styles.tableCell, { minWidth: 90 }]}>{r.saida || "—"}</Text>
-                  <Text style={[styles.tableCell, { minWidth: 100 }]}>{r.latitude ? r.latitude.toFixed(6) : "—"}</Text>
-                  <Text style={[styles.tableCell, { minWidth: 100 }]}>{r.longitude ? r.longitude.toFixed(6) : "—"}</Text>
-                  <Text style={[styles.tableCell, { minWidth: 80 }]}>
-                    {r.is_valid_location ? "Sim" : r.is_valid_location === false ? "Não" : "—"}
-                  </Text>
-                  <Text style={[styles.tableCell, { minWidth: 80 }]}>
-                    {r.distance_from_workplace_meters ? r.distance_from_workplace_meters.toFixed(2) : "—"}
-                  </Text>
                 </View>
               ))}
             </View>
