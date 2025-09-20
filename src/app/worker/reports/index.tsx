@@ -10,6 +10,16 @@ import * as Print from 'expo-print';
 
 type IconName = ComponentProps<typeof Ionicons>["name"];
 
+// Função para converter horas decimais para HH:MM
+const formatHoursToHHMM = (decimalHours: number): string => {
+  if (!decimalHours || decimalHours === 0) return "00:00";
+  
+  const hours = Math.floor(decimalHours);
+  const minutes = Math.round((decimalHours - hours) * 60);
+  
+  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+};
+
 export default function WorkerReportsScreen() {
   const [selectedPeriod, setSelectedPeriod] = useState("mes");
   const [reportData, setReportData] = useState<any>(null);
@@ -69,6 +79,9 @@ export default function WorkerReportsScreen() {
       const userRole = reportData?.stats?.role || 'N/A';
       const currentDate = new Date().toLocaleDateString('pt-BR');
       const currentTime = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      
+      // Convertendo as horas trabalhadas para HH:MM
+      const horasTrabalhadasFormatted = formatHoursToHHMM(reportData.stats?.horas_trabalhadas_total || 0);
 
       const htmlContent = `
         <!DOCTYPE html>
@@ -274,7 +287,7 @@ export default function WorkerReportsScreen() {
 
             <div class="stats-grid">
               <div class="stat-card hours">
-                <div class="stat-value">${reportData.stats?.horas_trabalhadas_total?.toFixed(1) || 0}h</div>
+                <div class="stat-value">${horasTrabalhadasFormatted}</div>
                 <div class="stat-label">Horas Trabalhadas</div>
               </div>
               <div class="stat-card absences">
@@ -378,13 +391,16 @@ export default function WorkerReportsScreen() {
       const currentDate = new Date().toLocaleDateString('pt-BR');
       const currentTime = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
+      // Convertendo as horas trabalhadas para HH:MM no CSV
+      const horasTrabalhadasFormatted = formatHoursToHHMM(reportData.stats?.horas_trabalhadas_total || 0);
+
       let csvContent = `Informações do Funcionário\nNome:,${userName}\nCPF:,${userCpf}\nFunção:,Terceirizado\n\n`
 
       csvContent += `Estatísticas do Período (${selectedPeriod === 'mes' ? 'Mês' : selectedPeriod === 'ano' ? 'Ano' : 'Dia'})\n`;
       csvContent += `Dias Trabalhados:,${reportData.stats?.dias_trabalhados || 0}\n`;
       csvContent += `Pontos Registrados:,${reportData.stats?.total_pontos_registrados || 0}\n`;
       csvContent += `Justificativas:,${reportData.stats?.total_justificativas || 0}\n`;
-      csvContent += `Horas Trabalhadas:,${reportData.stats?.horas_trabalhadas_total || 0}\n\n`;
+      csvContent += `Horas Trabalhadas:,${horasTrabalhadasFormatted}\n\n`;
 
       if (attendances.length > 0) {
         csvContent += "Registros de Ponto Detalhados\n";
@@ -499,7 +515,7 @@ export default function WorkerReportsScreen() {
                 
                 <View style={styles.statCard}>
                   <Ionicons name="calendar-outline" size={24} color="#2196F3" />
-                  <Text style={styles.statNumber}>{reportData.stats?.horas_trabalhadas_total || 0}</Text>
+                  <Text style={styles.statNumber}>{formatHoursToHHMM(reportData.stats?.horas_trabalhadas_total || 0)}</Text>
                   <Text style={styles.statLabel}>Horas Trabalhadas</Text>
                 </View>
               </View>
