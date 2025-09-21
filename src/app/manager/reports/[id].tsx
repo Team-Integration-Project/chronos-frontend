@@ -22,6 +22,26 @@ import * as Print from "expo-print";
 
 const { width } = Dimensions.get("window");
 
+interface LocationData {
+  latitude: number | null;
+  longitude: number | null;
+  altitude: number | null;
+  accuracy: number | null;
+  is_valid_location: boolean | null;
+  distance_from_workplace_meters: number | null;
+  place_name: string | null;
+}
+
+interface AttendanceRecord {
+  id?: string;
+  date?: string;
+  entrada?: string;
+  entrada_almoco?: string;
+  saida?: string;
+  status?: string;
+  [key: string]: any; 
+}
+
 export default function ReportIndividualScreen() {
   const params = useLocalSearchParams();
   const name = params.name || "Funcionário";
@@ -29,7 +49,7 @@ export default function ReportIndividualScreen() {
   const [period, setPeriod] = useState("mes");
   const [startDate, setStartDate] = useState<string | null>(null);
   const [endDate, setEndDate] = useState<string | null>(null);
-  const [attendances, setAttendances] = useState<any[]>([]);
+  const [attendances, setAttendances] = useState<AttendanceRecord[]>([]);
   const [totalAttendances, setTotalAttendances] = useState(0);
   const [stats, setStats] = useState({
     horas_trabalhadas_total: 0,
@@ -43,12 +63,75 @@ export default function ReportIndividualScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [justificationsLoading, setJustificationsLoading] = useState(false);
 
-  // Função para converter horas decimais para HH:MM
   const formatDecimalToHours = (decimalHours: number) => {
     const totalMinutes = Math.round(decimalHours * 60);
     const hours = Math.floor(totalMinutes / 60);
     const minutes = totalMinutes % 60;
     return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+  };
+
+  const extractLocationData = (attendance: any, pointType: 'entrada' | 'almoco' | 'saida'): LocationData => {
+    console.log(`Extraindo dados de localização para ${pointType}:`, attendance);
+    
+    if (attendance[`location_${pointType}`] && typeof attendance[`location_${pointType}`] === 'object') {
+      console.log(`Encontrou estrutura de objeto para ${pointType}:`, attendance[`location_${pointType}`]);
+      return {
+        latitude: attendance[`location_${pointType}`].latitude,
+        longitude: attendance[`location_${pointType}`].longitude,
+        altitude: attendance[`location_${pointType}`].altitude,
+        accuracy: attendance[`location_${pointType}`].accuracy,
+        is_valid_location: attendance[`location_${pointType}`].is_valid_location,
+        distance_from_workplace_meters: attendance[`location_${pointType}`].distance_from_workplace_meters,
+        place_name: attendance[`location_${pointType}`].place_name,
+      };
+    }
+
+    const latitude = attendance[`location_${pointType}_latitude`];
+    const longitude = attendance[`location_${pointType}_longitude`];
+    const altitude = attendance[`location_${pointType}_altitude`];
+    const accuracy = attendance[`location_${pointType}_accuracy`];
+    const isValid = attendance[`location_${pointType}_is_valid`];
+    const distance = attendance[`location_${pointType}_distance`];
+    const placeName = attendance[`location_${pointType}_place_name`];
+
+    if (latitude !== undefined || longitude !== undefined) {
+      console.log(`Encontrou campos flat para ${pointType}:`, {
+        latitude, longitude, altitude, accuracy, isValid, distance, placeName
+      });
+      return {
+        latitude,
+        longitude,
+        altitude,
+        accuracy,
+        is_valid_location: isValid,
+        distance_from_workplace_meters: distance,
+        place_name: placeName,
+      };
+    }
+
+    if (pointType === 'entrada' && (attendance.latitude || attendance.longitude)) {
+      console.log(`Usando campos básicos como fallback para ${pointType}`);
+      return {
+        latitude: attendance.latitude,
+        longitude: attendance.longitude,
+        altitude: attendance.altitude,
+        accuracy: attendance.accuracy,
+        is_valid_location: attendance.is_valid_location,
+        distance_from_workplace_meters: attendance.distance_from_workplace_meters,
+        place_name: attendance.place_name,
+      };
+    }
+
+    console.log(`Nenhum dado de localização encontrado para ${pointType}`);
+    return {
+      latitude: null,
+      longitude: null,
+      altitude: null,
+      accuracy: null,
+      is_valid_location: null,
+      distance_from_workplace_meters: null,
+      place_name: null,
+    };
   };
 
   const getCurrentPeriodDates = () => {
@@ -284,7 +367,6 @@ export default function ReportIndividualScreen() {
       const currentDate = new Date().toLocaleDateString("pt-BR");
       const currentTime = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 
-      // Converter horas trabalhadas para formato HH:MM
       const formattedHours = formatDecimalToHours(stats.horas_trabalhadas_total);
 
       const htmlContent = `
@@ -352,6 +434,10 @@ export default function ReportIndividualScreen() {
             .employee-info .meta {
               font-size: 14px;
               opacity: 0.9;
+            }
+            
+            .employee-info .meta p {
+              margin: 4px 0;
             }
             
             .stats-grid {
@@ -422,6 +508,7 @@ export default function ReportIndividualScreen() {
               border-radius: 8px;
               overflow: hidden;
               box-shadow: 0 4px 6px rgba(0,0,0,0.07);
+              font-size: 14px;
             }
             
             th {
@@ -433,6 +520,7 @@ export default function ReportIndividualScreen() {
               font-size: 14px;
               text-transform: uppercase;
               letter-spacing: 0.5px;
+              white-space: nowrap;
             }
             
             td {
@@ -440,6 +528,27 @@ export default function ReportIndividualScreen() {
               text-align: center;
               border-bottom: 1px solid #e9ecef;
               font-size: 14px;
+              vertical-align: top;
+              line-height: 1.2;
+            }
+            
+            .time-cell {
+              white-space: nowrap;
+              font-family: monospace;
+              font-weight: 600;
+            }
+            
+            .date-cell {
+              font-weight: 700;
+              color: #0A1F44;
+            }
+            
+            .location-cell {
+              font-size: 13px;
+              color: #333;
+              max-width: 150px;
+              word-wrap: break-word;
+              text-align: center;
             }
             
             tbody tr:nth-child(even) {
@@ -473,20 +582,26 @@ export default function ReportIndividualScreen() {
             
             @media print {
               body { background: white; }
-              .container { box-shadow: none; }
+              .container { box-shadow: none; max-width: 100%; padding: 20px; }
+              table { font-size: 12px; }
+              th { font-size: 12px; padding: 12px 8px; }
+              td { padding: 10px 8px; font-size: 12px; }
             }
           </style>
         </head>
         <body>
           <div class="container">
             <div class="header">
-              <h1>Relatório de Ponto Eletrônico</h1>
+              <h1>Relatório de Ponto Eletrônico - ${userName}</h1>
               <div class="subtitle">Sistema de Controle de Frequência</div>
             </div>
 
             <div class="employee-info">
               <h2>${userName}</h2>
-              <div class="meta">Relatório gerado em ${currentDate} às ${currentTime}</div>
+              <div class="meta">
+                <p>Período: ${period === 'mes' ? 'Mensal' : period === 'ano' ? 'Anual' : period === 'semana' ? 'Semanal' : 'Diário'}</p>
+                <p>Relatório gerado em ${currentDate} às ${currentTime}</p>
+              </div>
             </div>
 
             <div class="stats-grid">
@@ -495,44 +610,65 @@ export default function ReportIndividualScreen() {
                 <div class="stat-label">Horas Trabalhadas</div>
               </div>
               <div class="stat-card absences">
-                <div class="stat-value">${stats.total_faltas}</div>
+                <div class="stat-value">${stats.total_faltas || 0}</div>
                 <div class="stat-label">Faltas Registradas</div>
               </div>
               <div class="stat-card delays">
-                <div class="stat-value">${stats.total_atrasos}</div>
+                <div class="stat-value">${stats.total_atrasos || 0}</div>
                 <div class="stat-label">Atrasos (Após 07:00)</div>
               </div>
               <div class="stat-card justifications">
-                <div class="stat-value">${stats.total_justificativas}</div>
+                <div class="stat-value">${stats.total_justificativas || 0}</div>
                 <div class="stat-label">Justificativas</div>
               </div>
             </div>
 
             <div class="table-section">
-              <h2 class="table-title">Registros de Ponto</h2>
+              <h2 class="table-title">Registros de Ponto Detalhados</h2>
               ${
                 attendances.length > 0
                   ? `
                 <table>
                   <thead>
                     <tr>
-                      <th>Data</th>
-                      <th>Entrada</th>
-                      <th>Almoço</th>
-                      <th>Saída</th>
+                      <th style="width: 100px;">Data</th>
+                      <th style="width: 80px;">Entrada</th>
+                      <th style="width: 180px;">Local Entrada</th>
+                      <th style="width: 80px;">Almoço</th>
+                      <th style="width: 180px;">Local Almoço</th>
+                      <th style="width: 80px;">Saída</th>
+                      <th style="width: 180px;">Local Saída</th>
+                      <th style="width: 100px;">Status</th>
                     </tr>
                   </thead>
                   <tbody>
                     ${attendances
                       .map(
-                        (r) => `
-                      <tr>
-                        <td><strong>${r.date || "—"}</strong></td>
-                        <td>${r.entrada || "—"}</td>
-                        <td>${r.entrada_almoco || "—"}</td>
-                        <td>${r.saida || "—"}</td>
-                      </tr>
-                    `
+                        (r: AttendanceRecord, index) => {
+                        
+                          const locationEntrada: LocationData = extractLocationData(r, 'entrada');
+                          const locationAlmoco: LocationData = extractLocationData(r, 'almoco');
+                          const locationSaida: LocationData = extractLocationData(r, 'saida');
+                          
+                          const formattedEntrada: string = locationEntrada.place_name || '—';
+                          const formattedAlmoco: string = locationAlmoco.place_name || '—';
+                          const formattedSaida: string = locationSaida.place_name || '—';
+                          
+                          return `
+                          <tr${index % 2 === 0 ? ' style="background-color: #f8f9fa;"' : ''}>
+                            <td class="date-cell">${r.date || "—"}</td>
+                            <td class="time-cell">${r.entrada || "—"}</td>
+                            <td class="location-cell">${formattedEntrada}</td>
+                            <td class="time-cell">${r.entrada_almoco || "—"}</td>
+                            <td class="location-cell">${formattedAlmoco}</td>
+                            <td class="time-cell">${r.saida || "—"}</td>
+                            <td class="location-cell">${formattedSaida}</td>
+                            <td style="font-weight: 600; color: ${r.status === 'Aprovado' ? '#4CAF50' : r.status === 'Atraso' ? '#FF9800' : r.status === 'Falta' ? '#FF6B6B' : '#666'};">
+                              ${r.status || "—"}
+                            </td>
+                          </tr>
+                        `;
+                        }
                       )
                       .join("")}
                   </tbody>
@@ -550,7 +686,7 @@ export default function ReportIndividualScreen() {
               <div class="generated-info">
                 Relatório gerado automaticamente pelo Sistema de Ponto Eletrônico
               </div>
-              <div>Data de geração: ${currentDate} • Horário: ${currentTime}</div>
+              <div>Total de registros: ${attendances.length} | Data de geração: ${currentDate} • Horário: ${currentTime}</div>
             </div>
           </div>
         </body>
@@ -602,12 +738,19 @@ export default function ReportIndividualScreen() {
     try {
       const userName = Array.isArray(name) ? name[0] : name;
       
-      // Cabeçalho do CSV sem as colunas removidas
-      let csvContent = "Data,Entrada,Saida_Almoco,Entrada_Almoco,Saida\n";
+      let csvContent = "Data,Entrada,Local_Entrada,Almoço,Local_Almoco,Saida,Local_Saida,Status\n";
       
-      // Adicionar dados das linhas
       attendances.forEach((r) => {
-        csvContent += `${r.date || ""},${r.entrada || ""},${r.saida_almoco || ""},${r.entrada_almoco || ""},${r.saida || ""}\n`;
+        
+        const locEntrada = extractLocationData(r, 'entrada');
+        const locAlmoco = extractLocationData(r, 'almoco');
+        const locSaida = extractLocationData(r, 'saida');
+        
+        const localEntrada = locEntrada.place_name ? `"${locEntrada.place_name.replace(/"/g, '""')}"` : '';
+        const localAlmoco = locAlmoco.place_name ? `"${locAlmoco.place_name.replace(/"/g, '""')}"` : '';
+        const localSaida = locSaida.place_name ? `"${locSaida.place_name.replace(/"/g, '""')}"` : '';
+        
+        csvContent += `"${r.date || ""}","${r.entrada || ""}",${localEntrada},"${r.entrada_almoco || ""}",${localAlmoco},"${r.saida || ""}",${localSaida},"${r.status || ""}"\n`;
       });
 
       const fileName = `Relatorio_Ponto_${userName.replace(/\s/g, "_")}_${new Date().toISOString().split("T")[0]}.csv`;
@@ -775,17 +918,44 @@ export default function ReportIndividualScreen() {
               <View style={styles.tableHeader}>
                 <Text style={[styles.tableCell, { minWidth: 100 }]}>Data</Text>
                 <Text style={[styles.tableCell, { minWidth: 90 }]}>Entrada</Text>
-                <Text style={[styles.tableCell, { minWidth: 110 }]}>Almoço</Text>
+                <Text style={[styles.tableCell, { minWidth: 140 }]}>Local Entrada</Text>
+                <Text style={[styles.tableCell, { minWidth: 90 }]}>Almoço</Text>
+                <Text style={[styles.tableCell, { minWidth: 140 }]}>Local Almoço</Text>
                 <Text style={[styles.tableCell, { minWidth: 90 }]}>Saída</Text>
+                <Text style={[styles.tableCell, { minWidth: 140 }]}>Local Saída</Text>
+                <Text style={[styles.tableCell, { minWidth: 100 }]}>Status</Text>
               </View>
-              {attendances.map((r, idx) => (
-                <View key={r.id || idx} style={[styles.tableRow, idx % 2 === 0 && styles.tableRowAlt]}>
-                  <Text style={[styles.tableCell, { minWidth: 100 }]}>{r.date || "—"}</Text>
-                  <Text style={[styles.tableCell, { minWidth: 90 }]}>{r.entrada || "—"}</Text>
-                  <Text style={[styles.tableCell, { minWidth: 110 }]}>{r.entrada_almoco || "—"}</Text>
-                  <Text style={[styles.tableCell, { minWidth: 90 }]}>{r.saida || "—"}</Text>
-                </View>
-              ))}
+              {attendances.map((r, idx) => {
+                
+                const locationEntrada: LocationData = extractLocationData(r, 'entrada');
+                const locationAlmoco: LocationData = extractLocationData(r, 'almoco');
+                const locationSaida: LocationData = extractLocationData(r, 'saida');
+                
+                const formattedEntrada: string = locationEntrada.place_name || '—';
+                const formattedAlmoco: string = locationAlmoco.place_name || '—';
+                const formattedSaida: string = locationSaida.place_name || '—';
+                
+                return (
+                  <View key={r.id || idx} style={[styles.tableRow, idx % 2 === 0 && styles.tableRowAlt]}>
+                    <Text style={[styles.tableCell, { minWidth: 100 }]}>{r.date || "—"}</Text>
+                    <Text style={[styles.tableCell, { minWidth: 90 }]}>{r.entrada || "—"}</Text>
+                    <Text style={[styles.tableCell, { minWidth: 140, fontSize: 14 }]} numberOfLines={2}>{formattedEntrada}</Text>
+                    <Text style={[styles.tableCell, { minWidth: 90 }]}>{r.entrada_almoco || "—"}</Text>
+                    <Text style={[styles.tableCell, { minWidth: 140, fontSize: 14 }]} numberOfLines={2}>{formattedAlmoco}</Text>
+                    <Text style={[styles.tableCell, { minWidth: 90 }]}>{r.saida || "—"}</Text>
+                    <Text style={[styles.tableCell, { minWidth: 140, fontSize: 14 }]} numberOfLines={2}>{formattedSaida}</Text>
+                    <Text style={[styles.tableCell, { minWidth: 100, fontWeight: '600' as const }]}>
+                      <Text style={{ 
+                        color: r.status === 'Aprovado' ? '#4CAF50' : 
+                                r.status === 'Atraso' ? '#FF9800' : 
+                                r.status === 'Falta' ? '#FF6B6B' : '#B0B3C7' 
+                      }}>
+                        {r.status || "—"}
+                      </Text>
+                    </Text>
+                  </View>
+                );
+              })}
             </View>
           </ScrollView>
         ) : (
@@ -803,7 +973,6 @@ export default function ReportIndividualScreen() {
         </View>
       </ScrollView>
 
-      {/* Modal de Justificativas */}
       <Modal
         visible={modalVisible}
         animationType="slide"
@@ -947,10 +1116,10 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: "#0A1F44",
-  },
+  } as const,
   scrollContainer: {
     flex: 1,
-  },
+  } as const,
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -958,13 +1127,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingTop: 24,
     paddingBottom: 10,
-  },
+  } as const,
   header: {
     color: "#F4C542",
     fontSize: 20,
-    fontWeight: "bold",
+    fontWeight: "bold" as const,
     textAlign: "center",
-  },
+  } as const,
   summaryRow: {
     flexDirection: "row",
     gap: 10,
@@ -972,7 +1141,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
     justifyContent: "center",
     paddingHorizontal: 8,
-  },
+  } as const,
   summaryCard: {
     borderWidth: 2,
     borderRadius: 12,
@@ -983,49 +1152,49 @@ const styles = StyleSheet.create({
     width: (width - 46) / 4,
     backgroundColor: "#142850",
     minHeight: 95,
-  },
+  } as const,
   clickableCard: {
     shadowColor: "#000",
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
-  },
+  } as const,
   summaryValue: {
     color: "#F4C542",
-    fontWeight: "bold",
+    fontWeight: "bold" as const,
     fontSize: 15,
     marginBottom: 2,
-  },
+  } as const,
   summaryLabel: {
     color: "#B0B3C7",
     fontSize: 11,
     textAlign: "center",
-    fontWeight: "600",
-  },
+    fontWeight: "600" as const,
+  } as const,
   summarySubtitle: {
     color: "#8A8FA3",
     fontSize: 9,
     textAlign: "center",
     marginTop: 2,
-    fontStyle: "italic",
-  },
+    fontStyle: "italic" as const,
+  } as const,
   filtersSection: {
     backgroundColor: "#142850",
     borderRadius: 14,
     padding: 16,
     marginBottom: 18,
     marginHorizontal: 12,
-  },
+  } as const,
   filterLabel: {
     color: "#F4C542",
-    fontWeight: "bold",
+    fontWeight: "bold" as const,
     fontSize: 15,
     marginBottom: 4,
-  },
+  } as const,
   filterRow: {
     flexDirection: "row",
     gap: 8,
-  },
+  } as const,
   filterBtn: {
     backgroundColor: "#1A2A4F",
     borderRadius: 8,
@@ -1034,26 +1203,26 @@ const styles = StyleSheet.create({
     marginRight: 6,
     borderWidth: 1,
     borderColor: "#1A2A4F",
-  },
+  } as const,
   filterBtnActive: {
     backgroundColor: "#F4C542",
     borderColor: "#F4C542",
-  },
+  } as const,
   filterBtnText: {
     color: "#fff",
-    fontWeight: "bold",
+    fontWeight: "bold" as const,
     fontSize: 14,
-  },
+  } as const,
   filterBtnTextActive: {
     color: "#0A1F44",
-  },
+  } as const,
   tableSection: {
     marginHorizontal: 12,
     backgroundColor: "#142850",
     borderRadius: 12,
     padding: 10,
     marginTop: 10,
-  },
+  } as const,
   tableHeader: {
     flexDirection: "row",
     borderBottomWidth: 2,
@@ -1061,7 +1230,7 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
     marginBottom: 8,
     backgroundColor: "#142850",
-  },
+  } as const,
   tableRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -1069,10 +1238,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#1A2A4F",
     minHeight: 48,
-  },
+  } as const,
   tableRowAlt: {
     backgroundColor: "#1A2A4F",
-  },
+  } as const,
   tableCell: {
     flex: 1,
     color: "#fff",
@@ -1081,14 +1250,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     overflow: "hidden",
     minWidth: 70,
-  },
+  } as const,
   downloadSection: {
     flexDirection: "row",
     justifyContent: "center",
     gap: 16,
     marginVertical: 16,
     paddingBottom: 20,
-  },
+  } as const,
   downloadBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -1100,60 +1269,60 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 6,
     elevation: 2,
-  },
+  } as const,
   downloadBtnText: {
     color: "#0A1F44",
-    fontWeight: "bold",
+    fontWeight: "bold" as const,
     fontSize: 16,
-  },
+  } as const,
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-  },
+  } as const,
   loadingText: {
     color: "#B0B3C7",
     fontSize: 16,
     marginTop: 12,
-  },
+  } as const,
   emptyText: {
     color: "#B0B3C7",
     fontSize: 16,
     textAlign: "center",
     marginTop: 12,
     paddingHorizontal: 32,
-  },
+  } as const,
   emptyContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: 32,
     minHeight: 200,
-  },
+  } as const,
   retryBtn: {
     backgroundColor: "#F4C542",
     borderRadius: 8,
     paddingVertical: 12,
     paddingHorizontal: 24,
     marginTop: 16,
-  },
+  } as const,
   retryBtnText: {
     color: "#0A1F44",
-    fontWeight: "bold",
+    fontWeight: "bold" as const,
     fontSize: 16,
-  },
+  } as const,
   backBtn: {
     padding: 8,
-  },
+  } as const,
   contentContainer: {
     flexGrow: 1,
-  },
+  } as const,
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "center",
     alignItems: "center",
-  },
+  } as const,
   modalContent: {
     backgroundColor: "#142850",
     borderRadius: 16,
@@ -1161,48 +1330,48 @@ const styles = StyleSheet.create({
     width: "90%",
     maxWidth: 400,
     maxHeight: "80%",
-  },
+  } as const,
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 20,
-  },
+  } as const,
   modalTitle: {
     color: "#F4C542",
     fontSize: 18,
-    fontWeight: "bold",
+    fontWeight: "bold" as const,
     flex: 1,
-  },
+  } as const,
   modalLoading: {
     alignItems: "center",
     paddingVertical: 40,
-  },
+  } as const,
   modalLoadingText: {
     color: "#B0B3C7",
     fontSize: 16,
     marginTop: 12,
-  },
+  } as const,
   justificationsList: {
     maxHeight: 400,
-  },
+  } as const,
   justificationItem: {
     backgroundColor: "#1A2A4F",
     borderRadius: 8,
     padding: 12,
     marginBottom: 8,
-  },
+  } as const,
   justificationHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 8,
-  },
+  } as const,
   justificationDate: {
     color: "#B0B3C7",
     fontSize: 14,
-    fontWeight: "600",
-  },
+    fontWeight: "600" as const,
+  } as const,
   statusBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -1212,25 +1381,25 @@ const styles = StyleSheet.create({
     gap: 4,
     minWidth: 80,
     justifyContent: "center",
-  },
+  } as const,
   statusText: {
     color: "#333",
     fontSize: 11,
-    fontWeight: "bold",
-  },
+    fontWeight: "bold" as const,
+  } as const,
   justificationReason: {
     color: "#FFFFFF",
     fontSize: 14,
     lineHeight: 18,
-  },
+  } as const,
   emptyJustifications: {
     alignItems: "center",
     paddingVertical: 40,
-  },
+  } as const,
   emptyJustificationsText: {
     color: "#B0B3C7",
     fontSize: 16,
     textAlign: "center",
     marginTop: 12,
-  },
+  } as const,
 });
