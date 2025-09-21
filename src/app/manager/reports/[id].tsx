@@ -918,44 +918,17 @@ export default function ReportIndividualScreen() {
               <View style={styles.tableHeader}>
                 <Text style={[styles.tableCell, { minWidth: 100 }]}>Data</Text>
                 <Text style={[styles.tableCell, { minWidth: 90 }]}>Entrada</Text>
-                <Text style={[styles.tableCell, { minWidth: 140 }]}>Local Entrada</Text>
-                <Text style={[styles.tableCell, { minWidth: 90 }]}>Almoço</Text>
-                <Text style={[styles.tableCell, { minWidth: 140 }]}>Local Almoço</Text>
+                <Text style={[styles.tableCell, { minWidth: 110 }]}>Almoço</Text>
                 <Text style={[styles.tableCell, { minWidth: 90 }]}>Saída</Text>
-                <Text style={[styles.tableCell, { minWidth: 140 }]}>Local Saída</Text>
-                <Text style={[styles.tableCell, { minWidth: 100 }]}>Status</Text>
               </View>
-              {attendances.map((r, idx) => {
-                
-                const locationEntrada: LocationData = extractLocationData(r, 'entrada');
-                const locationAlmoco: LocationData = extractLocationData(r, 'almoco');
-                const locationSaida: LocationData = extractLocationData(r, 'saida');
-                
-                const formattedEntrada: string = locationEntrada.place_name || '—';
-                const formattedAlmoco: string = locationAlmoco.place_name || '—';
-                const formattedSaida: string = locationSaida.place_name || '—';
-                
-                return (
-                  <View key={r.id || idx} style={[styles.tableRow, idx % 2 === 0 && styles.tableRowAlt]}>
-                    <Text style={[styles.tableCell, { minWidth: 100 }]}>{r.date || "—"}</Text>
-                    <Text style={[styles.tableCell, { minWidth: 90 }]}>{r.entrada || "—"}</Text>
-                    <Text style={[styles.tableCell, { minWidth: 140, fontSize: 14 }]} numberOfLines={2}>{formattedEntrada}</Text>
-                    <Text style={[styles.tableCell, { minWidth: 90 }]}>{r.entrada_almoco || "—"}</Text>
-                    <Text style={[styles.tableCell, { minWidth: 140, fontSize: 14 }]} numberOfLines={2}>{formattedAlmoco}</Text>
-                    <Text style={[styles.tableCell, { minWidth: 90 }]}>{r.saida || "—"}</Text>
-                    <Text style={[styles.tableCell, { minWidth: 140, fontSize: 14 }]} numberOfLines={2}>{formattedSaida}</Text>
-                    <Text style={[styles.tableCell, { minWidth: 100, fontWeight: '600' as const }]}>
-                      <Text style={{ 
-                        color: r.status === 'Aprovado' ? '#4CAF50' : 
-                                r.status === 'Atraso' ? '#FF9800' : 
-                                r.status === 'Falta' ? '#FF6B6B' : '#B0B3C7' 
-                      }}>
-                        {r.status || "—"}
-                      </Text>
-                    </Text>
-                  </View>
-                );
-              })}
+              {attendances.map((r, idx) => (
+                <View key={r.id || idx} style={[styles.tableRow, idx % 2 === 0 && styles.tableRowAlt]}>
+                  <Text style={[styles.tableCell, { minWidth: 100 }]}>{r.date || "—"}</Text>
+                  <Text style={[styles.tableCell, { minWidth: 90 }]}>{r.entrada || "—"}</Text>
+                  <Text style={[styles.tableCell, { minWidth: 110 }]}>{r.entrada_almoco || "—"}</Text>
+                  <Text style={[styles.tableCell, { minWidth: 90 }]}>{r.saida || "—"}</Text>
+                </View>
+              ))}
             </View>
           </ScrollView>
         ) : (
