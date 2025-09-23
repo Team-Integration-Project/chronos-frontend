@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Alert, Dimensions, Linking, Animated, Modal } from "react-native";
 import { CameraView, useCameraPermissions, CameraPictureOptions } from "expo-camera";
@@ -52,6 +53,15 @@ const CustomSuccessModal: React.FC<CustomSuccessModalProps> = ({
   });
   const currentDate = new Date().toLocaleDateString("pt-BR");
 
+  const cleanPlaceName = (placeName: string | undefined): string => {
+    if (!placeName) return "";
+    return placeName
+      .trim()
+      .replace(/,+/g, ",")
+      .replace(/^,+|,+$/g, "")
+      .replace(/,\s*,/g, ",");
+  };
+
   return (
     <Modal
       transparent={true}
@@ -88,13 +98,11 @@ const CustomSuccessModal: React.FC<CustomSuccessModalProps> = ({
                   <Ionicons name="time-outline" size={16} color="#F4C542" />
                   <Text style={styles.timeText}>{currentTime}</Text>
                 </View>
-                {employeeData && (employeeData.place_name || employeeData.latitude || employeeData.longitude) && (
+                {employeeData?.place_name && (
                   <View style={styles.timeItem}>
                     <Ionicons name="location-outline" size={16} color="#F4C542" />
                     <Text style={styles.timeText}>
-                      Local do Ponto: {employeeData.place_name || `Lat: ${employeeData.latitude?.toFixed(6)}, Lon: ${employeeData.longitude?.toFixed(6)}`} 
-                      - {employeeData.is_valid_location ? 'Válido' : 'Fora do raio'}
-                      {employeeData.distance_from_workplace_meters ? ` (${employeeData.distance_from_workplace_meters.toFixed(2)}m do local de trabalho)` : ''}
+                      Local do Ponto: {cleanPlaceName(employeeData.place_name)}
                     </Text>
                   </View>
                 )}
@@ -382,20 +390,16 @@ export default function FacialRecognitionClockIn() {
         
         <View style={styles.cameraContainer}>
           <Animated.View
-            style={[
-              styles.cameraWrapper,
-              {
-                transform: [{ scale: pulseAnimation }],
-              },
-            ]}
+            style={{
+              ...styles.cameraWrapper,
+              transform: [{ scale: pulseAnimation }],
+            }}
           >
             <Animated.View 
-              style={[
-                styles.cameraFrame,
-                {
-                  borderColor: isScanning ? borderColor : "#F4C542",
-                },
-              ]}
+              style={{
+                ...styles.cameraFrame,
+                borderColor: isScanning ? borderColor : "#F4C542",
+              }}
             >
               <CameraView
                 ref={cameraRef}
@@ -408,12 +412,10 @@ export default function FacialRecognitionClockIn() {
               
               {isScanning && (
                 <Animated.View
-                  style={[
-                    styles.scanLine,
-                    {
-                      transform: [{ translateY: scanLineTranslateY }],
-                    },
-                  ]}
+                  style={{
+                    ...styles.scanLine,
+                    transform: [{ translateY: scanLineTranslateY }],
+                  }}
                 />
               )}
               

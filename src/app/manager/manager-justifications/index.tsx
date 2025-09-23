@@ -45,6 +45,17 @@ interface EmployeeSummary {
   lastJustificationDate: string;
 }
 
+// Novo estado para controlar os pop-ups personalizados
+interface CustomPopupState {
+  visible: boolean;
+  type: 'approve' | 'reject' | 'success' | 'error';
+  title: string;
+  message: string;
+  justificationId?: string;
+  onConfirm?: () => void;
+  onCancel?: () => void;
+}
+
 const STATUS_COLORS: Record<Status, string> = {
   pendente: "#F4C542",
   aprovada: "#4BB543",
@@ -75,7 +86,9 @@ type IconName =
   | "eye-outline"
   | "close"
   | "checkmark"
-  | "download-outline";
+  | "download-outline"
+  | "warning"
+  | "alert-circle";
 
 const { width } = Dimensions.get("window");
 
@@ -87,6 +100,17 @@ export default function ManagerJustificationsScreen() {
   const [justificationModalVisible, setJustificationModalVisible] = useState(false);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  
+  // Novo estado para o pop-up personalizado
+  const [customPopup, setCustomPopup] = useState<CustomPopupState>({
+    visible: false,
+    type: 'approve',
+    title: '',
+    message: '',
+    justificationId: undefined,
+    onConfirm: undefined,
+    onCancel: undefined,
+  });
 
   const mapJustificationStatus = (item: any): Status => {
     if (item.status === "aprovada" || item.status === "approved") {
@@ -277,11 +301,11 @@ export default function ManagerJustificationsScreen() {
         setEmployeeSummaries(organizedData);
         console.log("Justificativas organizadas com attachments:", organizedData);
       } else {
-        Alert.alert("Erro", "Falha ao carregar as justificativas.");
+        showCustomPopup('error', 'Erro', 'Falha ao carregar as justificativas.');
       }
     } catch (error) {
       console.error("Erro ao buscar justificativas:", error);
-      Alert.alert("Erro", "Não foi possível carregar as justificativas. Verifique sua conexão ou permissões.");
+      showCustomPopup('error', 'Erro de Conexão', 'Não foi possível carregar as justificativas. Verifique sua conexão ou permissões.');
     } finally {
       setLoading(false);
     }
@@ -291,9 +315,60 @@ export default function ManagerJustificationsScreen() {
     fetchJustifications();
   }, []);
 
-  const handleApprove = async (id: string) => {
+  // Função para mostrar o pop-up personalizado
+  const showCustomPopup = (
+    type: CustomPopupState['type'],
+    title: string,
+    message: string,
+    justificationId?: string,
+    onConfirm?: () => void,
+    onCancel?: () => void
+  ) => {
+    setCustomPopup({
+      visible: true,
+      type,
+      title,
+      message,
+      justificationId,
+      onConfirm,
+      onCancel,
+    });
+  };
+
+  // Função para fechar o pop-up personalizado
+  const hideCustomPopup = () => {
+    setCustomPopup(prev => ({ ...prev, visible: false }));
+  };
+
+  // Função modificada para aprovar com confirmação
+  const showApproveConfirmation = (id: string, employeeName: string) => {
+    showCustomPopup(
+      'approve',
+      'Confirmar Aprovação',
+      `Deseja aprovar a justificativa de ${employeeName}?`,
+      id,
+      () => executeApproval(id),
+      hideCustomPopup
+    );
+  };
+
+  // Função modificada para rejeitar com confirmação
+  const showRejectConfirmation = (id: string, employeeName: string) => {
+    showCustomPopup(
+      'reject',
+      'Confirmar Rejeição',
+      `Deseja rejeitar a justificativa de ${employeeName}?`,
+      id,
+      () => executeRejection(id),
+      hideCustomPopup
+    );
+  };
+
+  // Executar aprovação
+  const executeApproval = async (id: string) => {
     try {
       setActionLoading(id);
+      hideCustomPopup();
       console.log(`Tentando aprovar justificativa ${id}`);
 
       const response = await api.post(`/justification/${id}/approve/`, {
@@ -303,22 +378,27 @@ export default function ManagerJustificationsScreen() {
 
       if (response.status === 200) {
         updateJustificationStatus(id, "aprovada");
-        Alert.alert("✅ Sucesso", "Justificativa aprovada com sucesso!");
-        setTimeout(fetchJustifications, 1000);
+        showCustomPopup('success', '✅ Aprovado!', 'Justificativa aprovada com sucesso!');
+        setTimeout(() => {
+          hideCustomPopup();
+          fetchJustifications();
+        }, 2000);
       } else {
         throw new Error(`Status inesperado: ${response.status}`);
       }
     } catch (error) {
       console.error("Erro ao aprovar justificativa:", error);
-      Alert.alert("❌ Erro", "Falha ao aprovar a justificativa. Verifique suas permissões ou tente novamente.");
+      showCustomPopup('error', '❌ Erro', 'Falha ao aprovar a justificativa. Verifique suas permissões ou tente novamente.');
     } finally {
       setActionLoading(null);
     }
   };
 
-  const handleReject = async (id: string) => {
+  // Executar rejeição
+  const executeRejection = async (id: string) => {
     try {
       setActionLoading(id);
+      hideCustomPopup();
       console.log(`Tentando reprovar justificativa ${id}`);
 
       const response = await api.post(`/justification/${id}/approve/`, {
@@ -328,16 +408,34 @@ export default function ManagerJustificationsScreen() {
 
       if (response.status === 200) {
         updateJustificationStatus(id, "recusada");
-        Alert.alert("✅ Sucesso", "Justificativa rejeitada com sucesso!");
-        setTimeout(fetchJustifications, 1000);
+        showCustomPopup('success', '✅ Rejeitado!', 'Justificativa rejeitada com sucesso!');
+        setTimeout(() => {
+          hideCustomPopup();
+          fetchJustifications();
+        }, 2000);
       } else {
         throw new Error(`Status inesperado: ${response.status}`);
       }
     } catch (error) {
       console.error("Erro ao reprovar justificativa:", error);
-      Alert.alert("❌ Erro", "Falha ao reprovar a justificativa. Verifique suas permissões ou tente novamente.");
+      showCustomPopup('error', '❌ Erro', 'Falha ao reprovar a justificativa. Verifique suas permissões ou tente novamente.');
     } finally {
       setActionLoading(null);
+    }
+  };
+
+  // Funções originais modificadas para usar as novas confirmações
+  const handleApprove = async (id: string) => {
+    const justification = selectedJustification;
+    if (justification) {
+      showApproveConfirmation(id, justification.employee);
+    }
+  };
+
+  const handleReject = async (id: string) => {
+    const justification = selectedJustification;
+    if (justification) {
+      showRejectConfirmation(id, justification.employee);
     }
   };
 
@@ -403,27 +501,122 @@ export default function ManagerJustificationsScreen() {
         if (canOpen) {
           await Linking.openURL(attachment.uri);
         } else {
-          Alert.alert(
-            "Anexo Indisponível",
-            "Não foi possível abrir o anexo. O arquivo pode ter sido movido ou deletado."
-          );
+          showCustomPopup('error', 'Anexo Indisponível', 'Não foi possível abrir o anexo. O arquivo pode ter sido movido ou deletado.');
         }
       } else {
-        Alert.alert(
-          "Informações do Anexo",
+        showCustomPopup(
+          'error',
+          'Informações do Anexo',
           `Nome: ${attachment.name}\nTamanho: ${formatFileSize(attachment.size)}${
             attachment.type ? `\nTipo: ${attachment.type}` : ""
-          }`,
-          [
-            { text: "Fechar", style: "cancel" },
-            { text: "Tentar Download", onPress: () => console.log("Download attempt:", attachment.name) },
-          ]
+          }`
         );
       }
     } catch (error) {
       console.error("Erro ao abrir anexo:", error);
-      Alert.alert("Erro", "Não foi possível abrir o anexo.");
+      showCustomPopup('error', 'Erro', 'Não foi possível abrir o anexo.');
     }
+  };
+
+  // Componente do Pop-up Personalizado
+  const CustomPopupModal = () => {
+    if (!customPopup.visible) return null;
+
+    const getPopupIcon = (): IconName => {
+      switch (customPopup.type) {
+        case 'approve':
+          return 'checkmark-circle';
+        case 'reject':
+          return 'close-circle';
+        case 'success':
+          return 'checkmark-circle';
+        case 'error':
+          return 'alert-circle';
+        default:
+          return 'warning';
+      }
+    };
+
+    const getPopupIconColor = (): string => {
+      switch (customPopup.type) {
+        case 'approve':
+        case 'success':
+          return '#4BB543';
+        case 'reject':
+        case 'error':
+          return '#FF6B6B';
+        default:
+          return '#F4C542';
+      }
+    };
+
+    const isConfirmationPopup = customPopup.type === 'approve' || customPopup.type === 'reject';
+
+    return (
+      <Modal
+        visible={customPopup.visible}
+        transparent
+        animationType="fade"
+        onRequestClose={hideCustomPopup}
+      >
+        <View style={styles.customPopupOverlay}>
+          <View style={styles.customPopupContainer}>
+            <View style={styles.customPopupContent}>
+              <View style={styles.customPopupIconContainer}>
+                <Ionicons 
+                  name={getPopupIcon()} 
+                  size={48} 
+                  color={getPopupIconColor()} 
+                />
+              </View>
+              
+              <Text style={styles.customPopupTitle}>{customPopup.title}</Text>
+              <Text style={styles.customPopupMessage}>{customPopup.message}</Text>
+              
+              <View style={styles.customPopupButtons}>
+                {isConfirmationPopup ? (
+                  <>
+                    <TouchableOpacity
+                      style={[styles.customPopupButton, styles.customPopupCancelButton]}
+                      onPress={customPopup.onCancel || hideCustomPopup}
+                      disabled={actionLoading !== null}
+                    >
+                      <Text style={styles.customPopupCancelButtonText}>Cancelar</Text>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity
+                      style={[
+                        styles.customPopupButton,
+                        customPopup.type === 'approve' 
+                          ? styles.customPopupApproveButton 
+                          : styles.customPopupRejectButton
+                      ]}
+                      onPress={customPopup.onConfirm || hideCustomPopup}
+                      disabled={actionLoading !== null}
+                    >
+                      {actionLoading === customPopup.justificationId ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                      ) : (
+                        <Text style={styles.customPopupConfirmButtonText}>
+                          {customPopup.type === 'approve' ? 'Aprovar' : 'Rejeitar'}
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <TouchableOpacity
+                    style={[styles.customPopupButton, styles.customPopupOkButton]}
+                    onPress={hideCustomPopup}
+                  >
+                    <Text style={styles.customPopupConfirmButtonText}>OK</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
   };
 
   const renderEmployeeItem = ({ item }: { item: EmployeeSummary }) => (
@@ -727,6 +920,9 @@ export default function ManagerJustificationsScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Pop-up Personalizado */}
+      <CustomPopupModal />
     </SafeAreaView>
   );
 }
@@ -1151,5 +1347,96 @@ const styles = StyleSheet.create({
   compactProcessedText: {
     fontSize: 14,
     fontWeight: "600",
+  },
+  
+  // Estilos do Pop-up Personalizado
+  customPopupOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.8)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 20,
+  },
+  customPopupContainer: {
+    backgroundColor: "#142850", // Fundo azul do sistema
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: "#F4C542", // Borda amarela do sistema
+    width: "90%",
+    maxWidth: 350,
+    elevation: 10,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  customPopupContent: {
+    padding: 24,
+    alignItems: "center",
+  },
+  customPopupIconContainer: {
+    marginBottom: 16,
+    backgroundColor: "#1A2A4F",
+    borderRadius: 50,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#F4C542",
+  },
+  customPopupTitle: {
+    color: "#F4C542", // Amarelo do sistema
+    fontSize: 20,
+    fontWeight: "bold",
+    textAlign: "center",
+    marginBottom: 12,
+  },
+  customPopupMessage: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    textAlign: "center",
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  customPopupButtons: {
+    flexDirection: "row",
+    gap: 12,
+    width: "100%",
+  },
+  customPopupButton: {
+    flex: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 48,
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+  },
+  customPopupCancelButton: {
+    backgroundColor: "#1A2A4F",
+    borderWidth: 1,
+    borderColor: "#F4C542",
+  },
+  customPopupApproveButton: {
+    backgroundColor: "#4BB543",
+  },
+  customPopupRejectButton: {
+    backgroundColor: "#FF6B6B",
+  },
+  customPopupOkButton: {
+    backgroundColor: "#F4C542",
+  },
+  customPopupCancelButtonText: {
+    color: "#F4C542",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  customPopupConfirmButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "bold",
   },
 });

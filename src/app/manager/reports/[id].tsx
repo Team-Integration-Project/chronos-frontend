@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -8,7 +9,6 @@ import {
   ScrollView,
   Dimensions,
   ActivityIndicator,
-  Alert,
   Platform,
   Modal,
   FlatList,
@@ -39,7 +39,16 @@ interface AttendanceRecord {
   entrada_almoco?: string;
   saida?: string;
   status?: string;
-  [key: string]: any; 
+  [key: string]: any;
+}
+
+interface CustomPopupState {
+  visible: boolean;
+  type: 'pdf' | 'csv' | 'success' | 'error' | 'loading';
+  title: string;
+  message: string;
+  onConfirm?: () => void;
+  onCancel?: () => void;
 }
 
 export default function ReportIndividualScreen() {
@@ -63,6 +72,16 @@ export default function ReportIndividualScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [justificationsLoading, setJustificationsLoading] = useState(false);
 
+  // Estado para pop-ups personalizados
+  const [customPopup, setCustomPopup] = useState<CustomPopupState>({
+    visible: false,
+    type: 'pdf',
+    title: '',
+    message: '',
+    onConfirm: undefined,
+    onCancel: undefined,
+  });
+
   const formatDecimalToHours = (decimalHours: number) => {
     const totalMinutes = Math.round(decimalHours * 60);
     const hours = Math.floor(totalMinutes / 60);
@@ -71,10 +90,7 @@ export default function ReportIndividualScreen() {
   };
 
   const extractLocationData = (attendance: any, pointType: 'entrada' | 'almoco' | 'saida'): LocationData => {
-    console.log(`Extraindo dados de localização para ${pointType}:`, attendance);
-    
     if (attendance[`location_${pointType}`] && typeof attendance[`location_${pointType}`] === 'object') {
-      console.log(`Encontrou estrutura de objeto para ${pointType}:`, attendance[`location_${pointType}`]);
       return {
         latitude: attendance[`location_${pointType}`].latitude,
         longitude: attendance[`location_${pointType}`].longitude,
@@ -95,9 +111,6 @@ export default function ReportIndividualScreen() {
     const placeName = attendance[`location_${pointType}_place_name`];
 
     if (latitude !== undefined || longitude !== undefined) {
-      console.log(`Encontrou campos flat para ${pointType}:`, {
-        latitude, longitude, altitude, accuracy, isValid, distance, placeName
-      });
       return {
         latitude,
         longitude,
@@ -110,7 +123,6 @@ export default function ReportIndividualScreen() {
     }
 
     if (pointType === 'entrada' && (attendance.latitude || attendance.longitude)) {
-      console.log(`Usando campos básicos como fallback para ${pointType}`);
       return {
         latitude: attendance.latitude,
         longitude: attendance.longitude,
@@ -122,7 +134,6 @@ export default function ReportIndividualScreen() {
       };
     }
 
-    console.log(`Nenhum dado de localização encontrado para ${pointType}`);
     return {
       latitude: null,
       longitude: null,
@@ -177,10 +188,31 @@ export default function ReportIndividualScreen() {
     return { start: formatDate(start), end: formatDate(end) };
   };
 
+  // Funções para gerenciar pop-ups
+  const showCustomPopup = (
+    type: CustomPopupState['type'],
+    title: string,
+    message: string,
+    onConfirm?: () => void,
+    onCancel?: () => void
+  ) => {
+    setCustomPopup({
+      visible: true,
+      type,
+      title,
+      message,
+      onConfirm,
+      onCancel,
+    });
+  };
+
+  const hideCustomPopup = () => {
+    setCustomPopup(prev => ({ ...prev, visible: false }));
+  };
+
   const fetchUserJustifications = async () => {
     try {
       setJustificationsLoading(true);
-      console.log(`Buscando justificativas para usuário ${userId} (${name})`);
       const response = await api.get("/justification/");
 
       if (response.status === 200) {
@@ -200,7 +232,6 @@ export default function ReportIndividualScreen() {
         const filteredJustifications = userJustifications.filter((item: any) => {
           const itemDate = item.date || (item.created_at ? item.created_at.split("T")[0] : null);
           if (!itemDate) return false;
-
           return itemDate >= start && itemDate <= end;
         });
 
@@ -213,11 +244,10 @@ export default function ReportIndividualScreen() {
         }));
 
         setJustifications(formattedJustifications);
-        console.log("Justificativas filtradas do usuário:", formattedJustifications);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Erro ao buscar justificativas:", error);
-      Alert.alert("Erro", "Não foi possível carregar as justificativas.");
+      showCustomPopup('error', 'Erro', 'Não foi possível carregar as justificativas.');
     } finally {
       setJustificationsLoading(false);
     }
@@ -278,8 +308,6 @@ export default function ReportIndividualScreen() {
         setLoading(true);
         setError(null);
 
-        console.log(`Buscando dados para usuário ${userId} com período ${period}`);
-
         let apiUrl = `/attendance/${userId}/`;
         const queryParams = [];
 
@@ -303,14 +331,11 @@ export default function ReportIndividualScreen() {
         }
 
         const response = await api.get(apiUrl);
-        console.log("Resposta da API:", response.data);
-
         const { attendances: data, total_attendances, stats: newStats } = response.data;
 
         if (data) {
           setAttendances(data);
         } else {
-          console.warn("Dados de attendances não encontrados na resposta");
           setAttendances([]);
         }
 
@@ -328,14 +353,11 @@ export default function ReportIndividualScreen() {
             total_justificativas: newStats.total_justificativas || 0,
           };
           setStats(updatedStats);
-          console.log("Stats atualizadas:", updatedStats);
         } else {
-          console.warn("Stats não encontradas na resposta, usando valores padrão");
           setStats({ horas_trabalhadas_total: 0, total_faltas: 0, total_atrasos: 0, total_justificativas: 0 });
         }
       } catch (error: any) {
         console.error("Erro ao buscar atendimentos:", error);
-
         let errorMessage = "Falha ao carregar os atendimentos. Tente novamente.";
         if (error.response?.status === 404) {
           errorMessage = "Usuário não encontrado.";
@@ -344,7 +366,6 @@ export default function ReportIndividualScreen() {
         } else if (error.message) {
           errorMessage = error.message;
         }
-
         setError(errorMessage);
       } finally {
         setLoading(false);
@@ -354,19 +375,43 @@ export default function ReportIndividualScreen() {
     if (userId) {
       fetchUserAttendance();
     } else {
-      console.error("UserId não fornecido");
       setError("ID do usuário não encontrado");
       setLoading(false);
     }
   }, [userId, period, startDate, endDate]);
 
-  const generatePdf = async () => {
-    setLoading(true);
+  // Funções para confirmação de PDF/CSV
+  const showPdfConfirmation = () => {
+    const userName = Array.isArray(name) ? name[0] : name;
+    showCustomPopup(
+      'pdf',
+      'Gerar Relatório PDF',
+      `Deseja gerar o relatório em PDF para ${userName}? O arquivo incluirá todos os dados do período selecionado.`,
+      executePdfGeneration,
+      hideCustomPopup
+    );
+  };
+
+  const showCsvConfirmation = () => {
+    const userName = Array.isArray(name) ? name[0] : name;
+    showCustomPopup(
+      'csv',
+      'Gerar Relatório CSV',
+      `Deseja gerar o relatório em CSV para ${userName}? O arquivo poderá ser aberto no Excel ou similar.`,
+      executeCsvGeneration,
+      hideCustomPopup
+    );
+  };
+
+  // Executar geração de PDF
+  const executePdfGeneration = async () => {
     try {
+      hideCustomPopup();
+      showCustomPopup('loading', 'Gerando PDF', 'Aguarde enquanto o relatório está sendo gerado...');
+      
       const userName = Array.isArray(name) ? name[0] : name;
       const currentDate = new Date().toLocaleDateString("pt-BR");
       const currentTime = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-
       const formattedHours = formatDecimalToHours(stats.horas_trabalhadas_total);
 
       const htmlContent = `
@@ -375,218 +420,84 @@ export default function ReportIndividualScreen() {
         <head>
           <meta charset="UTF-8">
           <style>
-            * {
-              margin: 0;
-              padding: 0;
-              box-sizing: border-box;
-            }
-            
+            * { margin: 0; padding: 0; box-sizing: border-box; }
             body { 
               font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-              line-height: 1.6;
-              color: #333;
-              background: #f8f9fa;
+              line-height: 1.6; color: #333; background: #f8f9fa;
             }
-            
             .container {
-              max-width: 1000px;
-              margin: 0 auto;
-              padding: 40px;
-              background: white;
-              box-shadow: 0 0 20px rgba(0,0,0,0.1);
+              max-width: 1000px; margin: 0 auto; padding: 40px;
+              background: white; box-shadow: 0 0 20px rgba(0,0,0,0.1);
             }
-            
             .header {
-              text-align: center;
-              margin-bottom: 40px;
-              padding-bottom: 20px;
+              text-align: center; margin-bottom: 40px; padding-bottom: 20px;
               border-bottom: 3px solid #0A1F44;
             }
-            
             .header h1 {
-              color: #0A1F44;
-              font-size: 28px;
-              font-weight: 700;
-              margin-bottom: 10px;
+              color: #0A1F44; font-size: 28px; font-weight: 700; margin-bottom: 10px;
             }
-            
-            .header .subtitle {
-              color: #666;
-              font-size: 16px;
-              font-weight: 400;
-            }
-            
+            .header .subtitle { color: #666; font-size: 16px; font-weight: 400; }
             .employee-info {
               background: linear-gradient(135deg, #0A1F44 0%, #142850 100%);
-              color: white;
-              padding: 25px;
-              border-radius: 12px;
-              margin-bottom: 30px;
-              text-align: center;
+              color: white; padding: 25px; border-radius: 12px; margin-bottom: 30px; text-align: center;
             }
-            
-            .employee-info h2 {
-              font-size: 24px;
-              margin-bottom: 8px;
-              color: #F4C542;
-            }
-            
-            .employee-info .meta {
-              font-size: 14px;
-              opacity: 0.9;
-            }
-            
-            .employee-info .meta p {
-              margin: 4px 0;
-            }
-            
+            .employee-info h2 { font-size: 24px; margin-bottom: 8px; color: #F4C542; }
+            .employee-info .meta { font-size: 14px; opacity: 0.9; }
+            .employee-info .meta p { margin: 4px 0; }
             .stats-grid {
-              display: grid;
-              grid-template-columns: repeat(2, 1fr);
-              gap: 20px;
-              margin-bottom: 40px;
+              display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-bottom: 40px;
             }
-            
             .stat-card {
-              background: white;
-              border: 2px solid;
-              border-radius: 12px;
-              padding: 20px;
-              text-align: center;
-              box-shadow: 0 4px 6px rgba(0,0,0,0.07);
-              transition: transform 0.2s;
+              background: white; border: 2px solid; border-radius: 12px; padding: 20px;
+              text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.07);
             }
-            
             .stat-card.hours { border-color: #4CAF50; }
             .stat-card.absences { border-color: #FF6B6B; }
             .stat-card.delays { border-color: #FF9800; }
             .stat-card.justifications { border-color: #2196F3; }
-            
             .stat-value {
-              font-size: 32px;
-              font-weight: 700;
-              margin-bottom: 5px;
-              color: #0A1F44;
+              font-size: 32px; font-weight: 700; margin-bottom: 5px; color: #0A1F44;
             }
-            
             .stat-card.hours .stat-value { color: #4CAF50; }
             .stat-card.absences .stat-value { color: #FF6B6B; }
             .stat-card.delays .stat-value { color: #FF9800; }
             .stat-card.justifications .stat-value { color: #2196F3; }
-            
             .stat-label {
-              font-size: 14px;
-              color: #666;
-              text-transform: uppercase;
-              letter-spacing: 1px;
-              font-weight: 600;
+              font-size: 14px; color: #666; text-transform: uppercase;
+              letter-spacing: 1px; font-weight: 600;
             }
-            
-            .table-section {
-              margin-top: 30px;
-            }
-            
+            .table-section { margin-top: 30px; }
             .table-title {
-              color: #0A1F44;
-              font-size: 20px;
-              font-weight: 700;
-              margin-bottom: 20px;
-              display: flex;
-              align-items: center;
+              color: #0A1F44; font-size: 20px; font-weight: 700;
+              margin-bottom: 20px; display: flex; align-items: center;
             }
-            
-            .table-title::before {
-              content: "📋";
-              margin-right: 10px;
-              font-size: 22px;
-            }
-            
             table {
-              width: 100%;
-              border-collapse: collapse;
-              background: white;
-              border-radius: 8px;
-              overflow: hidden;
-              box-shadow: 0 4px 6px rgba(0,0,0,0.07);
+              width: 100%; border-collapse: collapse; background: white;
+              border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.07);
               font-size: 14px;
             }
-            
             th {
               background: linear-gradient(135deg, #0A1F44 0%, #142850 100%);
-              color: #F4C542;
-              padding: 16px 12px;
-              text-align: center;
-              font-weight: 600;
-              font-size: 14px;
-              text-transform: uppercase;
-              letter-spacing: 0.5px;
-              white-space: nowrap;
+              color: #F4C542; padding: 16px 12px; text-align: center; font-weight: 600;
+              font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;
             }
-            
             td {
-              padding: 14px 12px;
-              text-align: center;
-              border-bottom: 1px solid #e9ecef;
-              font-size: 14px;
-              vertical-align: top;
-              line-height: 1.2;
+              padding: 14px 12px; text-align: center; border-bottom: 1px solid #e9ecef;
+              font-size: 14px; vertical-align: top; line-height: 1.2;
             }
-            
-            .time-cell {
-              white-space: nowrap;
-              font-family: monospace;
-              font-weight: 600;
-            }
-            
-            .date-cell {
-              font-weight: 700;
-              color: #0A1F44;
-            }
-            
+            .time-cell { white-space: nowrap; font-family: monospace; font-weight: 600; }
+            .date-cell { font-weight: 700; color: #0A1F44; }
             .location-cell {
-              font-size: 13px;
-              color: #333;
-              max-width: 150px;
-              word-wrap: break-word;
-              text-align: center;
+              font-size: 13px; color: #333; max-width: 150px;
+              word-wrap: break-word; text-align: center;
             }
-            
-            tbody tr:nth-child(even) {
-              background-color: #f8f9fa;
-            }
-            
-            tbody tr:hover {
-              background-color: #e3f2fd;
-            }
-            
-            .no-data {
-              text-align: center;
-              padding: 40px;
-              color: #666;
-              font-style: italic;
-            }
-            
+            tbody tr:nth-child(even) { background-color: #f8f9fa; }
+            .no-data { text-align: center; padding: 40px; color: #666; font-style: italic; }
             .footer {
-              margin-top: 50px;
-              padding-top: 20px;
-              border-top: 2px solid #e9ecef;
-              text-align: center;
-              color: #666;
-              font-size: 12px;
+              margin-top: 50px; padding-top: 20px; border-top: 2px solid #e9ecef;
+              text-align: center; color: #666; font-size: 12px;
             }
-            
-            .footer .generated-info {
-              margin-bottom: 10px;
-              font-weight: 500;
-            }
-            
-            @media print {
-              body { background: white; }
-              .container { box-shadow: none; max-width: 100%; padding: 20px; }
-              table { font-size: 12px; }
-              th { font-size: 12px; padding: 12px 8px; }
-              td { padding: 10px 8px; font-size: 12px; }
-            }
+            .footer .generated-info { margin-bottom: 10px; font-weight: 500; }
           </style>
         </head>
         <body>
@@ -595,7 +506,6 @@ export default function ReportIndividualScreen() {
               <h1>Relatório de Ponto Eletrônico - ${userName}</h1>
               <div class="subtitle">Sistema de Controle de Frequência</div>
             </div>
-
             <div class="employee-info">
               <h2>${userName}</h2>
               <div class="meta">
@@ -603,7 +513,6 @@ export default function ReportIndividualScreen() {
                 <p>Relatório gerado em ${currentDate} às ${currentTime}</p>
               </div>
             </div>
-
             <div class="stats-grid">
               <div class="stat-card hours">
                 <div class="stat-value">${formattedHours}</div>
@@ -622,70 +531,41 @@ export default function ReportIndividualScreen() {
                 <div class="stat-label">Justificativas</div>
               </div>
             </div>
-
             <div class="table-section">
               <h2 class="table-title">Registros de Ponto Detalhados</h2>
-              ${
-                attendances.length > 0
-                  ? `
-                <table>
+              ${attendances.length > 0
+                ? `<table>
                   <thead>
                     <tr>
-                      <th style="width: 100px;">Data</th>
-                      <th style="width: 80px;">Entrada</th>
-                      <th style="width: 180px;">Local Entrada</th>
-                      <th style="width: 80px;">Almoço</th>
-                      <th style="width: 180px;">Local Almoço</th>
-                      <th style="width: 80px;">Saída</th>
-                      <th style="width: 180px;">Local Saída</th>
-                      <th style="width: 100px;">Status</th>
+                      <th>Data</th><th>Entrada</th><th>Local Entrada</th>
+                      <th>Almoço</th><th>Local Almoço</th><th>Saída</th>
+                      <th>Local Saída</th><th>Status</th>
                     </tr>
                   </thead>
                   <tbody>
-                    ${attendances
-                      .map(
-                        (r: AttendanceRecord, index) => {
-                        
-                          const locationEntrada: LocationData = extractLocationData(r, 'entrada');
-                          const locationAlmoco: LocationData = extractLocationData(r, 'almoco');
-                          const locationSaida: LocationData = extractLocationData(r, 'saida');
-                          
-                          const formattedEntrada: string = locationEntrada.place_name || '—';
-                          const formattedAlmoco: string = locationAlmoco.place_name || '—';
-                          const formattedSaida: string = locationSaida.place_name || '—';
-                          
-                          return `
-                          <tr${index % 2 === 0 ? ' style="background-color: #f8f9fa;"' : ''}>
-                            <td class="date-cell">${r.date || "—"}</td>
-                            <td class="time-cell">${r.entrada || "—"}</td>
-                            <td class="location-cell">${formattedEntrada}</td>
-                            <td class="time-cell">${r.entrada_almoco || "—"}</td>
-                            <td class="location-cell">${formattedAlmoco}</td>
-                            <td class="time-cell">${r.saida || "—"}</td>
-                            <td class="location-cell">${formattedSaida}</td>
-                            <td style="font-weight: 600; color: ${r.status === 'Aprovado' ? '#4CAF50' : r.status === 'Atraso' ? '#FF9800' : r.status === 'Falta' ? '#FF6B6B' : '#666'};">
-                              ${r.status || "—"}
-                            </td>
-                          </tr>
-                        `;
-                        }
-                      )
-                      .join("")}
+                    ${attendances.map((r: AttendanceRecord, index) => {
+                      const locationEntrada = extractLocationData(r, 'entrada');
+                      const locationAlmoco = extractLocationData(r, 'almoco');
+                      const locationSaida = extractLocationData(r, 'saida');
+                      
+                      return `<tr${index % 2 === 0 ? ' style="background-color: #f8f9fa;"' : ''}>
+                        <td class="date-cell">${r.date || "—"}</td>
+                        <td class="time-cell">${r.entrada || "—"}</td>
+                        <td class="location-cell">${locationEntrada.place_name || '—'}</td>
+                        <td class="time-cell">${r.entrada_almoco || "—"}</td>
+                        <td class="location-cell">${locationAlmoco.place_name || '—'}</td>
+                        <td class="time-cell">${r.saida || "—"}</td>
+                        <td class="location-cell">${locationSaida.place_name || '—'}</td>
+                        <td style="font-weight: 600;">${r.status || "—"}</td>
+                      </tr>`;
+                    }).join("")}
                   </tbody>
-                </table>
-              `
-                  : `
-                <div class="no-data">
-                  📅 Nenhum registro de ponto encontrado para o período selecionado
-                </div>
-              `
+                </table>`
+                : `<div class="no-data">Nenhum registro de ponto encontrado para o período selecionado</div>`
               }
             </div>
-
             <div class="footer">
-              <div class="generated-info">
-                Relatório gerado automaticamente pelo Sistema de Ponto Eletrônico
-              </div>
+              <div class="generated-info">Relatório gerado automaticamente pelo Sistema de Ponto Eletrônico</div>
               <div>Total de registros: ${attendances.length} | Data de geração: ${currentDate} • Horário: ${currentTime}</div>
             </div>
           </div>
@@ -713,9 +593,12 @@ export default function ReportIndividualScreen() {
           await FileSystem.writeAsStringAsync(uri, fileContent, {
             encoding: FileSystem.EncodingType.Base64,
           });
-          Alert.alert("Sucesso", `PDF salvo com sucesso! Você pode acessá-lo usando um gerenciador de arquivos.`);
+          
+          hideCustomPopup();
+          showCustomPopup('success', 'PDF Gerado!', `Relatório PDF salvo com sucesso! Você pode acessá-lo usando um gerenciador de arquivos.`);
         } else {
-          Alert.alert("Erro", "Permissão negada para acessar o diretório.");
+          hideCustomPopup();
+          showCustomPopup('error', 'Erro de Permissão', 'Permissão negada para acessar o diretório.');
         }
       } else {
         const { uri } = await Print.printToFileAsync({
@@ -723,25 +606,26 @@ export default function ReportIndividualScreen() {
           base64: false,
         });
         await Sharing.shareAsync(uri);
-        Alert.alert("Sucesso", "PDF gerado com sucesso e pronto para salvar ou compartilhar!");
+        hideCustomPopup();
+        showCustomPopup('success', 'PDF Gerado!', 'PDF gerado com sucesso e pronto para salvar ou compartilhar!');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Erro ao gerar PDF:", error);
-      Alert.alert("Erro", "Não foi possível gerar o PDF. Tente novamente.");
-    } finally {
-      setLoading(false);
+      hideCustomPopup();
+      showCustomPopup('error', 'Erro ao Gerar PDF', `Não foi possível gerar o PDF: ${error.message || 'Erro desconhecido'}`);
     }
   };
 
-  const generateCsv = async () => {
-    setLoading(true);
+  // Executar geração de CSV
+  const executeCsvGeneration = async () => {
     try {
-      const userName = Array.isArray(name) ? name[0] : name;
+      hideCustomPopup();
+      showCustomPopup('loading', 'Gerando CSV', 'Aguarde enquanto o arquivo CSV está sendo gerado...');
       
+      const userName = Array.isArray(name) ? name[0] : name;
       let csvContent = "Data,Entrada,Local_Entrada,Almoço,Local_Almoco,Saida,Local_Saida,Status\n";
       
       attendances.forEach((r) => {
-        
         const locEntrada = extractLocationData(r, 'entrada');
         const locAlmoco = extractLocationData(r, 'almoco');
         const locSaida = extractLocationData(r, 'saida');
@@ -764,22 +648,129 @@ export default function ReportIndividualScreen() {
             "text/csv"
           );
           await FileSystem.writeAsStringAsync(uri, csvContent);
-          Alert.alert("Sucesso", `CSV salvo com sucesso! Você pode acessá-lo usando um gerenciador de arquivos.`);
+          hideCustomPopup();
+          showCustomPopup('success', 'CSV Gerado!', `Arquivo CSV salvo com sucesso! Você pode acessá-lo usando um gerenciador de arquivos.`);
         } else {
-          Alert.alert("Erro", "Permissão negada para acessar o diretório.");
+          hideCustomPopup();
+          showCustomPopup('error', 'Erro de Permissão', 'Permissão negada para acessar o diretório.');
         }
       } else {
         const tempPath = `${FileSystem.cacheDirectory}${fileName}`;
         await FileSystem.writeAsStringAsync(tempPath, csvContent);
         await Sharing.shareAsync(tempPath);
-        Alert.alert("Sucesso", "CSV gerado com sucesso e pronto para salvar ou compartilhar!");
+        hideCustomPopup();
+        showCustomPopup('success', 'CSV Gerado!', 'CSV gerado com sucesso e pronto para salvar ou compartilhar!');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Erro ao gerar CSV:", error);
-      Alert.alert("Erro", "Não foi possível gerar o CSV. Tente novamente.");
-    } finally {
-      setLoading(false);
+      hideCustomPopup();
+      showCustomPopup('error', 'Erro ao Gerar CSV', `Não foi possível gerar o CSV: ${error.message || 'Erro desconhecido'}`);
     }
+  };
+
+  // Funções para geração de PDF/CSV
+  const generatePdf = async () => {
+    showPdfConfirmation();
+  };
+
+  const generateCsv = async () => {
+    showCsvConfirmation();
+  };
+
+  // Componente do Pop-up Personalizado
+  const CustomPopupModal = () => {
+    if (!customPopup.visible) return null;
+
+    const getPopupIcon = () => {
+      switch (customPopup.type) {
+        case 'pdf': return 'document-text-outline';
+        case 'csv': return 'grid-outline';
+        case 'success': return 'checkmark-circle';
+        case 'error': return 'alert-circle';
+        case 'loading': return 'hourglass-outline';
+        default: return 'help-circle-outline';
+      }
+    };
+
+    const getPopupIconColor = () => {
+      switch (customPopup.type) {
+        case 'pdf': return '#F4C542';
+        case 'csv': return '#4CAF50';
+        case 'success': return '#4BB543';
+        case 'error': return '#FF6B6B';
+        case 'loading': return '#F4C542';
+        default: return '#B0B3C7';
+      }
+    };
+
+    const isConfirmationPopup = customPopup.type === 'pdf' || customPopup.type === 'csv';
+    const isLoadingPopup = customPopup.type === 'loading';
+
+    return (
+      <Modal
+        visible={customPopup.visible}
+        transparent
+        animationType="fade"
+        onRequestClose={!isLoadingPopup ? hideCustomPopup : undefined}
+      >
+        <View style={styles.customPopupOverlay}>
+          <View style={styles.customPopupContainer}>
+            <View style={styles.customPopupContent}>
+              <View style={styles.customPopupIconContainer}>
+                {isLoadingPopup ? (
+                  <ActivityIndicator size={48} color={getPopupIconColor()} />
+                ) : (
+                  <Ionicons 
+                    name={getPopupIcon()} 
+                    size={48} 
+                    color={getPopupIconColor()} 
+                  />
+                )}
+              </View>
+              
+              <Text style={styles.customPopupTitle}>{customPopup.title}</Text>
+              <Text style={styles.customPopupMessage}>{customPopup.message}</Text>
+              
+              {!isLoadingPopup && (
+                <View style={styles.customPopupButtons}>
+                  {isConfirmationPopup ? (
+                    <>
+                      <TouchableOpacity
+                        style={[styles.customPopupButton, styles.customPopupCancelButton]}
+                        onPress={customPopup.onCancel || hideCustomPopup}
+                      >
+                        <Text style={styles.customPopupCancelButtonText}>Cancelar</Text>
+                      </TouchableOpacity>
+                      
+                      <TouchableOpacity
+                        style={[
+                          styles.customPopupButton,
+                          customPopup.type === 'pdf' 
+                            ? styles.customPopupPdfButton 
+                            : styles.customPopupCsvButton
+                        ]}
+                        onPress={customPopup.onConfirm || hideCustomPopup}
+                      >
+                        <Text style={styles.customPopupConfirmButtonText}>
+                          {customPopup.type === 'pdf' ? 'Gerar PDF' : 'Gerar CSV'}
+                        </Text>
+                      </TouchableOpacity>
+                    </>
+                  ) : (
+                    <TouchableOpacity
+                      style={[styles.customPopupButton, styles.customPopupOkButton]}
+                      onPress={hideCustomPopup}
+                    >
+                      <Text style={styles.customPopupConfirmButtonText}>OK</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
   };
 
   if (loading) {
@@ -998,6 +989,8 @@ export default function ReportIndividualScreen() {
           </View>
         </View>
       </Modal>
+
+      <CustomPopupModal />
     </SafeAreaView>
   );
 }
@@ -1089,10 +1082,10 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: "#0A1F44",
-  } as const,
+  },
   scrollContainer: {
     flex: 1,
-  } as const,
+  },
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -1100,13 +1093,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingTop: 24,
     paddingBottom: 10,
-  } as const,
+  },
   header: {
     color: "#F4C542",
     fontSize: 20,
-    fontWeight: "bold" as const,
+    fontWeight: "bold",
     textAlign: "center",
-  } as const,
+  },
   summaryRow: {
     flexDirection: "row",
     gap: 10,
@@ -1114,7 +1107,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
     justifyContent: "center",
     paddingHorizontal: 8,
-  } as const,
+  },
   summaryCard: {
     borderWidth: 2,
     borderRadius: 12,
@@ -1125,49 +1118,49 @@ const styles = StyleSheet.create({
     width: (width - 46) / 4,
     backgroundColor: "#142850",
     minHeight: 95,
-  } as const,
+  },
   clickableCard: {
     shadowColor: "#000",
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
-  } as const,
+  },
   summaryValue: {
     color: "#F4C542",
-    fontWeight: "bold" as const,
+    fontWeight: "bold",
     fontSize: 15,
     marginBottom: 2,
-  } as const,
+  },
   summaryLabel: {
     color: "#B0B3C7",
     fontSize: 11,
     textAlign: "center",
-    fontWeight: "600" as const,
-  } as const,
+    fontWeight: "600",
+  },
   summarySubtitle: {
     color: "#8A8FA3",
     fontSize: 9,
     textAlign: "center",
     marginTop: 2,
-    fontStyle: "italic" as const,
-  } as const,
+    fontStyle: "italic",
+  },
   filtersSection: {
     backgroundColor: "#142850",
     borderRadius: 14,
     padding: 16,
     marginBottom: 18,
     marginHorizontal: 12,
-  } as const,
+  },
   filterLabel: {
     color: "#F4C542",
-    fontWeight: "bold" as const,
+    fontWeight: "bold",
     fontSize: 15,
     marginBottom: 4,
-  } as const,
+  },
   filterRow: {
     flexDirection: "row",
     gap: 8,
-  } as const,
+  },
   filterBtn: {
     backgroundColor: "#1A2A4F",
     borderRadius: 8,
@@ -1176,26 +1169,26 @@ const styles = StyleSheet.create({
     marginRight: 6,
     borderWidth: 1,
     borderColor: "#1A2A4F",
-  } as const,
+  },
   filterBtnActive: {
     backgroundColor: "#F4C542",
     borderColor: "#F4C542",
-  } as const,
+  },
   filterBtnText: {
     color: "#fff",
-    fontWeight: "bold" as const,
+    fontWeight: "bold",
     fontSize: 14,
-  } as const,
+  },
   filterBtnTextActive: {
     color: "#0A1F44",
-  } as const,
+  },
   tableSection: {
     marginHorizontal: 12,
     backgroundColor: "#142850",
     borderRadius: 12,
     padding: 10,
     marginTop: 10,
-  } as const,
+  },
   tableHeader: {
     flexDirection: "row",
     borderBottomWidth: 2,
@@ -1203,7 +1196,7 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
     marginBottom: 8,
     backgroundColor: "#142850",
-  } as const,
+  },
   tableRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -1211,10 +1204,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#1A2A4F",
     minHeight: 48,
-  } as const,
+  },
   tableRowAlt: {
     backgroundColor: "#1A2A4F",
-  } as const,
+  },
   tableCell: {
     flex: 1,
     color: "#fff",
@@ -1223,14 +1216,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     overflow: "hidden",
     minWidth: 70,
-  } as const,
+  },
   downloadSection: {
     flexDirection: "row",
     justifyContent: "center",
     gap: 16,
     marginVertical: 16,
     paddingBottom: 20,
-  } as const,
+  },
   downloadBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -1242,60 +1235,60 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 6,
     elevation: 2,
-  } as const,
+  },
   downloadBtnText: {
     color: "#0A1F44",
-    fontWeight: "bold" as const,
+    fontWeight: "bold",
     fontSize: 16,
-  } as const,
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-  } as const,
+  },
   loadingText: {
     color: "#B0B3C7",
     fontSize: 16,
     marginTop: 12,
-  } as const,
+  },
   emptyText: {
     color: "#B0B3C7",
     fontSize: 16,
     textAlign: "center",
     marginTop: 12,
     paddingHorizontal: 32,
-  } as const,
+  },
   emptyContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: 32,
     minHeight: 200,
-  } as const,
+  },
   retryBtn: {
     backgroundColor: "#F4C542",
     borderRadius: 8,
     paddingVertical: 12,
     paddingHorizontal: 24,
     marginTop: 16,
-  } as const,
+  },
   retryBtnText: {
     color: "#0A1F44",
-    fontWeight: "bold" as const,
+    fontWeight: "bold",
     fontSize: 16,
-  } as const,
+  },
   backBtn: {
     padding: 8,
-  } as const,
+  },
   contentContainer: {
     flexGrow: 1,
-  } as const,
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "center",
     alignItems: "center",
-  } as const,
+  },
   modalContent: {
     backgroundColor: "#142850",
     borderRadius: 16,
@@ -1303,48 +1296,48 @@ const styles = StyleSheet.create({
     width: "90%",
     maxWidth: 400,
     maxHeight: "80%",
-  } as const,
+  },
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 20,
-  } as const,
+  },
   modalTitle: {
     color: "#F4C542",
     fontSize: 18,
-    fontWeight: "bold" as const,
+    fontWeight: "bold",
     flex: 1,
-  } as const,
+  },
   modalLoading: {
     alignItems: "center",
     paddingVertical: 40,
-  } as const,
+  },
   modalLoadingText: {
     color: "#B0B3C7",
     fontSize: 16,
     marginTop: 12,
-  } as const,
+  },
   justificationsList: {
     maxHeight: 400,
-  } as const,
+  },
   justificationItem: {
     backgroundColor: "#1A2A4F",
     borderRadius: 8,
     padding: 12,
     marginBottom: 8,
-  } as const,
+  },
   justificationHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 8,
-  } as const,
+  },
   justificationDate: {
     color: "#B0B3C7",
     fontSize: 14,
-    fontWeight: "600" as const,
-  } as const,
+    fontWeight: "600",
+  },
   statusBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -1354,25 +1347,118 @@ const styles = StyleSheet.create({
     gap: 4,
     minWidth: 80,
     justifyContent: "center",
-  } as const,
+  },
   statusText: {
     color: "#333",
     fontSize: 11,
-    fontWeight: "bold" as const,
-  } as const,
+    fontWeight: "bold",
+  },
   justificationReason: {
     color: "#FFFFFF",
     fontSize: 14,
     lineHeight: 18,
-  } as const,
+  },
   emptyJustifications: {
     alignItems: "center",
     paddingVertical: 40,
-  } as const,
+  },
   emptyJustificationsText: {
     color: "#B0B3C7",
     fontSize: 16,
     textAlign: "center",
     marginTop: 12,
-  } as const,
+  },
+  customPopupOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.8)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 20,
+  },
+  customPopupContainer: {
+    backgroundColor: "#142850",
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: "#F4C542",
+    width: "90%",
+    maxWidth: 350,
+    elevation: 10,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  customPopupContent: {
+    padding: 24,
+    alignItems: "center",
+  },
+  customPopupIconContainer: {
+    marginBottom: 16,
+    backgroundColor: "#1A2A4F",
+    borderRadius: 50,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#F4C542",
+    minHeight: 80,
+    minWidth: 80,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  customPopupTitle: {
+    color: "#F4C542",
+    fontSize: 20,
+    fontWeight: "bold",
+    textAlign: "center",
+    marginBottom: 12,
+  },
+  customPopupMessage: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    textAlign: "center",
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  customPopupButtons: {
+    flexDirection: "row",
+    gap: 12,
+    width: "100%",
+  },
+  customPopupButton: {
+    flex: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 48,
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+  },
+  customPopupCancelButton: {
+    backgroundColor: "#1A2A4F",
+    borderWidth: 1,
+    borderColor: "#F4C542",
+  },
+  customPopupPdfButton: {
+    backgroundColor: "#F4C542",
+  },
+  customPopupCsvButton: {
+    backgroundColor: "#4CAF50",
+  },
+  customPopupOkButton: {
+    backgroundColor: "#F4C542",
+  },
+  customPopupCancelButtonText: {
+    color: "#F4C542",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  customPopupConfirmButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
 });
