@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -37,6 +36,7 @@ interface AttendanceRecord {
   date?: string;
   entrada?: string;
   entrada_almoco?: string;
+  saida_almoco?: string;
   saida?: string;
   status?: string;
   [key: string]: any;
@@ -60,7 +60,12 @@ export default function ReportIndividualScreen() {
   const [endDate, setEndDate] = useState<string | null>(null);
   const [attendances, setAttendances] = useState<AttendanceRecord[]>([]);
   const [totalAttendances, setTotalAttendances] = useState(0);
-  const [stats, setStats] = useState({
+  const [stats, setStats] = useState<{
+    horas_trabalhadas_total: number;
+    total_faltas: number;
+    total_atrasos: number;
+    total_justificativas: number;
+  }>({
     horas_trabalhadas_total: 0,
     total_faltas: 0,
     total_atrasos: 0,
@@ -72,7 +77,6 @@ export default function ReportIndividualScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [justificationsLoading, setJustificationsLoading] = useState(false);
 
-  // Estado para pop-ups personalizados
   const [customPopup, setCustomPopup] = useState<CustomPopupState>({
     visible: false,
     type: 'pdf',
@@ -188,7 +192,6 @@ export default function ReportIndividualScreen() {
     return { start: formatDate(start), end: formatDate(end) };
   };
 
-  // Funções para gerenciar pop-ups
   const showCustomPopup = (
     type: CustomPopupState['type'],
     title: string,
@@ -302,15 +305,37 @@ export default function ReportIndividualScreen() {
     }
   };
 
+  const calculateWorkedHours = (attendances: AttendanceRecord[]) => {
+    let totalHours = 0;
+    attendances.forEach((r) => {
+      if (r.entrada && r.saida && r.entrada !== '-' && r.saida !== '-') {
+        const [entryHour, entryMinute] = r.entrada.split(':').map(Number);
+        const [exitHour, exitMinute] = r.saida.split(':').map(Number);
+        const [day, month, year] = r.date!.split('/').map(Number);
+        const entryTime = new Date(year, month - 1, day, entryHour, entryMinute);
+        const exitTime = new Date(year, month - 1, day, exitHour, exitMinute);
+        const hours = (exitTime.getTime() - entryTime.getTime()) / (1000 * 60 * 60);
+        totalHours += hours;
+      }
+    });
+    return totalHours;
+  };
+
   useEffect(() => {
     const fetchUserAttendance = async () => {
       try {
         setLoading(true);
         setError(null);
-
+        setStats({
+          horas_trabalhadas_total: 0,
+          total_faltas: 0,
+          total_atrasos: 0,
+          total_justificativas: 0,
+        });
+  
         let apiUrl = `/attendance/${userId}/`;
         const queryParams = [];
-
+  
         if (startDate && endDate) {
           queryParams.push(`start_date=${startDate}`);
           queryParams.push(`end_date=${endDate}`);
@@ -325,37 +350,117 @@ export default function ReportIndividualScreen() {
         } else {
           queryParams.push(`period=${period}`);
         }
-
+  
         if (queryParams.length > 0) {
           apiUrl += `?${queryParams.join("&")}`;
         }
-
+  
         const response = await api.get(apiUrl);
         const { attendances: data, total_attendances, stats: newStats } = response.data;
-
+  
         if (data) {
-          setAttendances(data);
+          const sortedData = [...data].sort((a, b) => {
+            const dateA = new Date(a.date.split('/').reverse().join('-'));
+            const dateB = new Date(b.date.split('/').reverse().join('-'));
+            return dateA.getTime() - dateB.getTime();
+          });
+  
+          const formatDateForComparison = (date: Date) => {
+            return date.toLocaleDateString('pt-BR', {
+              day: '2-digit',
+              month: '2-digit',
+              year: 'numeric',
+            });
+          };
+  
+          // Filtrar registros com presença (entrada !== '-' e status !== 'falta')
+          const filteredData = sortedData.filter(r => r.entrada !== '-' && r.status !== 'falta');
+  
+          setAttendances(filteredData);
+  
+          // Recalcular horas trabalhadas no frontend
+          const recalculatedHours = calculateWorkedHours(filteredData);
+  
+          let updatedStats = {
+            horas_trabalhadas_total: recalculatedHours,
+            total_faltas: 0,
+            total_atrasos: Number(newStats.total_atrasos) || 0,
+            total_justificativas: Number(newStats.total_justificativas) || 0,
+          };
+  
+          // Ajustar o cálculo de faltas para o período "hoje"
+          if (period === "hoje") {
+            const today = new Date();
+            const todayStr = formatDateForComparison(today);
+            const dayData = sortedData.find(r => r.date === todayStr);
+  
+            console.log(`Verificando ${todayStr} (período "hoje"):`, {
+              dayData: dayData ? {
+                date: dayData.date,
+                entrada: dayData.entrada,
+                status: dayData.status,
+              } : 'Sem registro',
+            });
+  
+            if (dayData && dayData.entrada !== '-' && dayData.status !== 'falta') {
+              console.log(`Presença confirmada em ${todayStr}: ${dayData.status}`);
+              updatedStats.total_faltas = 0;
+            } else {
+              console.log(`Falta detectada em ${todayStr}`);
+              updatedStats.total_faltas = 1;
+            }
+          } else {
+            // Para outros períodos, calcular faltas a partir do primeiro ponto
+            const firstPointIndex = sortedData.findIndex(r => r.entrada !== '-');
+            if (firstPointIndex !== -1) {
+              const firstPointDate = new Date(sortedData[firstPointIndex].date.split('/').reverse().join('-'));
+              const today = new Date();
+              const periodEnd = new Date(Math.min(
+                new Date(sortedData[sortedData.length - 1].date.split('/').reverse().join('-')).getTime(),
+                today.getTime()
+              ));
+  
+              let currentDate = new Date(firstPointDate);
+              let recalculatedFaltas = 0;
+  
+              console.log(`Calculando faltas de ${formatDateForComparison(firstPointDate)} até ${formatDateForComparison(periodEnd)}`);
+  
+              while (currentDate <= periodEnd) {
+                const currentDateStr = formatDateForComparison(currentDate);
+                const dayData = sortedData.find(r => r.date === currentDateStr);
+  
+                console.log(`Verificando ${currentDateStr}:`, {
+                  dayData: dayData ? {
+                    date: dayData.date,
+                    entrada: dayData.entrada,
+                    status: dayData.status,
+                  } : 'Sem registro',
+                });
+  
+                if (currentDate.getDay() !== 0 && currentDate.getDay() !== 6 && (!dayData || dayData.status !== 'feriado_domingo')) {
+                  if (!dayData || dayData.status === 'falta') {
+                    recalculatedFaltas++;
+                    console.log(`Falta detectada em ${currentDateStr}`);
+                  } else {
+                    console.log(`Presença confirmada em ${currentDateStr}: ${dayData?.status}`);
+                  }
+                } else {
+                  console.log(`Ignorado ${currentDateStr} (sábado, domingo ou feriado)`);
+                }
+  
+                currentDate.setDate(currentDate.getDate() + 1);
+              }
+  
+              updatedStats.total_faltas = recalculatedFaltas;
+            }
+          }
+  
+          setStats(updatedStats);
         } else {
           setAttendances([]);
         }
-
-        if (total_attendances !== undefined) {
-          setTotalAttendances(total_attendances);
-        } else {
-          setTotalAttendances(0);
-        }
-
-        if (newStats && typeof newStats === "object") {
-          const updatedStats = {
-            horas_trabalhadas_total: newStats.horas_trabalhadas_total || 0,
-            total_faltas: newStats.total_faltas || 0,
-            total_atrasos: newStats.total_atrasos || 0,
-            total_justificativas: newStats.total_justificativas || 0,
-          };
-          setStats(updatedStats);
-        } else {
-          setStats({ horas_trabalhadas_total: 0, total_faltas: 0, total_atrasos: 0, total_justificativas: 0 });
-        }
+  
+        setTotalAttendances(total_attendances !== undefined ? total_attendances : 0);
       } catch (error: any) {
         console.error("Erro ao buscar atendimentos:", error);
         let errorMessage = "Falha ao carregar os atendimentos. Tente novamente.";
@@ -371,7 +476,7 @@ export default function ReportIndividualScreen() {
         setLoading(false);
       }
     };
-
+  
     if (userId) {
       fetchUserAttendance();
     } else {
@@ -380,7 +485,6 @@ export default function ReportIndividualScreen() {
     }
   }, [userId, period, startDate, endDate]);
 
-  // Funções para confirmação de PDF/CSV
   const showPdfConfirmation = () => {
     const userName = Array.isArray(name) ? name[0] : name;
     showCustomPopup(
@@ -403,7 +507,6 @@ export default function ReportIndividualScreen() {
     );
   };
 
-  // Executar geração de PDF
   const executePdfGeneration = async () => {
     try {
       hideCustomPopup();
@@ -616,7 +719,6 @@ export default function ReportIndividualScreen() {
     }
   };
 
-  // Executar geração de CSV
   const executeCsvGeneration = async () => {
     try {
       hideCustomPopup();
@@ -668,7 +770,6 @@ export default function ReportIndividualScreen() {
     }
   };
 
-  // Funções para geração de PDF/CSV
   const generatePdf = async () => {
     showPdfConfirmation();
   };
@@ -677,7 +778,6 @@ export default function ReportIndividualScreen() {
     showCsvConfirmation();
   };
 
-  // Componente do Pop-up Personalizado
   const CustomPopupModal = () => {
     if (!customPopup.visible) return null;
 
@@ -1016,7 +1116,7 @@ function SummaryCard({
   onPress,
   isClickable = false,
 }: SummaryCardProps) {
-  const displayValue = typeof value === "number" ? value : 0;
+  const displayValue = Number(value) || 0;
 
   let formattedValue: string;
   let currentSuffix = suffix;
