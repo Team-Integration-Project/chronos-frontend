@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, FlatList, Modal
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { AxiosError } from "axios";
 import api from "../../../services/api";
 
 interface User {
@@ -48,6 +49,17 @@ const formatPhoneNumber = (phone: string): string => {
 
 const unformat = (value: string): string => value.replace(/\D/g, "");
 
+const getApiErrorMessage = (error: unknown, fallback: string): string => {
+  if (error instanceof AxiosError && error.response) {
+    const data = error.response.data as { error?: string; detail?: string };
+    return data.error || data.detail || fallback;
+  }
+  if (error instanceof Error) {
+    return error.message || fallback;
+  }
+  return fallback;
+};
+
 export default function ProfileScreen() {
   const [user, setUser] = useState<User>({
     username: "",
@@ -68,6 +80,12 @@ export default function ProfileScreen() {
   const [loading, setLoading] = useState<boolean>(true);
   const snackbarTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const showSnackbar = (message: string) => {
+    setSnackbar(message);
+    if (snackbarTimeout.current) clearTimeout(snackbarTimeout.current);
+    snackbarTimeout.current = setTimeout(() => setSnackbar(""), 2500);
+  };
+
   const fetchProfile = async () => {
     try {
       const response = await api.get("/profile/");
@@ -81,9 +99,7 @@ export default function ProfileScreen() {
       });
     } catch (error) {
       console.error("Erro ao buscar perfil:", error);
-      setSnackbar("Erro ao carregar perfil.");
-      if (snackbarTimeout.current) clearTimeout(snackbarTimeout.current);
-      snackbarTimeout.current = setTimeout(() => setSnackbar(""), 2000);
+      showSnackbar(getApiErrorMessage(error, "Erro ao carregar perfil."));
     }
   };
 
@@ -102,9 +118,7 @@ export default function ProfileScreen() {
       setLoading(false);
     } catch (error) {
       console.error("Erro ao buscar funcionários:", error);
-      setSnackbar("Erro ao carregar funcionários.");
-      if (snackbarTimeout.current) clearTimeout(snackbarTimeout.current);
-      snackbarTimeout.current = setTimeout(() => setSnackbar(""), 2000);
+      showSnackbar(getApiErrorMessage(error, "Erro ao carregar funcionários."));
       setLoading(false);
     }
   };
@@ -119,22 +133,16 @@ export default function ProfileScreen() {
       phone_number: unformat(funcionarioEditar.phone_number),
     };
 
-    if (cleanedData.cpf && !/^\d{11}$/.test(cleanedData.cpf)) {
-      setSnackbar("CPF deve conter 11 dígitos numéricos.");
-      if (snackbarTimeout.current) clearTimeout(snackbarTimeout.current);
-      snackbarTimeout.current = setTimeout(() => setSnackbar(""), 2000);
+    if (!/^\d{11}$/.test(cleanedData.cpf)) {
+      showSnackbar("CPF é obrigatório e deve conter 11 dígitos numéricos.");
       return;
     }
     if (cleanedData.phone_number && !/^\d{10,11}$/.test(cleanedData.phone_number)) {
-      setSnackbar("Telefone deve conter 10 ou 11 dígitos numéricos.");
-      if (snackbarTimeout.current) clearTimeout(snackbarTimeout.current);
-      snackbarTimeout.current = setTimeout(() => setSnackbar(""), 2000);
+      showSnackbar("Telefone deve conter 10 ou 11 dígitos numéricos.");
       return;
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanedData.email)) {
-      setSnackbar("E-mail inválido.");
-      if (snackbarTimeout.current) clearTimeout(snackbarTimeout.current);
-      snackbarTimeout.current = setTimeout(() => setSnackbar(""), 2000);
+      showSnackbar("E-mail inválido.");
       return;
     }
 
@@ -160,14 +168,10 @@ export default function ProfileScreen() {
       });
       setModalEditar(false);
       setFuncionarioEditar(null);
-      setSnackbar("Funcionário editado com sucesso!");
-      if (snackbarTimeout.current) clearTimeout(snackbarTimeout.current);
-      snackbarTimeout.current = setTimeout(() => setSnackbar(""), 2000);
+      showSnackbar("Funcionário editado com sucesso!");
     } catch (error) {
       console.error("Erro ao atualizar funcionário:", error);
-      setSnackbar("Erro ao atualizar funcionário.");
-      if (snackbarTimeout.current) clearTimeout(snackbarTimeout.current);
-      snackbarTimeout.current = setTimeout(() => setSnackbar(""), 2000);
+      showSnackbar(getApiErrorMessage(error, "Erro ao atualizar funcionário."));
     }
   };
 
@@ -182,14 +186,10 @@ export default function ProfileScreen() {
     try {
       await api.delete(`/list-manage/${funcionarioParaRemover.id}/`);
       setFuncionarios((prev) => prev.filter((f) => f.id !== funcionarioParaRemover.id));
-      setSnackbar(`Funcionário ${funcionarioParaRemover.nome} removido!`);
-      if (snackbarTimeout.current) clearTimeout(snackbarTimeout.current);
-      snackbarTimeout.current = setTimeout(() => setSnackbar(""), 2000);
+      showSnackbar(`Funcionário ${funcionarioParaRemover.nome} removido!`);
     } catch (error) {
       console.error("Erro ao remover funcionário:", error);
-      setSnackbar("Erro ao remover funcionário.");
-      if (snackbarTimeout.current) clearTimeout(snackbarTimeout.current);
-      snackbarTimeout.current = setTimeout(() => setSnackbar(""), 2000);
+      showSnackbar(getApiErrorMessage(error, "Erro ao remover funcionário."));
     } finally {
       setFuncionarioParaRemover(null);
       setModalRemover(false);
@@ -198,13 +198,11 @@ export default function ProfileScreen() {
 
   const handleLogout = async () => {
     try {
-      await AsyncStorage.removeItem("accessToken");
+      await AsyncStorage.multiRemove(["accessToken", "refreshToken", "userType"]);
       router.replace("/");
     } catch (error) {
       console.error("Erro ao fazer logout:", error);
-      setSnackbar("Erro ao realizar logout.");
-      if (snackbarTimeout.current) clearTimeout(snackbarTimeout.current);
-      snackbarTimeout.current = setTimeout(() => setSnackbar(""), 2000);
+      showSnackbar(getApiErrorMessage(error, "Erro ao realizar logout."));
     }
   };
 

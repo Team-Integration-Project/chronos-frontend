@@ -256,7 +256,7 @@ export default function FacialRecognitionRegister() {
       } as any);
       formData.append("username", userData.username);
       formData.append("email", userData.email);
-      formData.append("cpf", userData.cpf);
+      formData.append("cpf", userData.cpf.replace(/\D/g, ""));
       formData.append("phone_number", userData.phone_number.replace(/\D/g, ""));
       formData.append("password", userData.password);
       formData.append("confirm_password", userData.confirm_password);

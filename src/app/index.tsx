@@ -7,28 +7,62 @@ import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import api from "../services/api";
 import { AxiosError } from "axios";
+import MaskInput from "react-native-mask-input";
+
+interface LoginResponse {
+  access: string;
+  refresh: string;
+  user: {
+    role: string;
+  };
+}
 
 export default function SignIn() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [cpf, setCpf] = useState<string>("");
+  const [password, setPassword] = useState<string>("");
+  const [showPassword, setShowPassword] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(false);
+
+  const cpfMask = [
+    /\d/, /\d/, /\d/, '.', /\d/, /\d/, /\d/, '.', /\d/, /\d/, /\d/, '-', /\d/, /\d/,
+  ];
+
+  const isValidCPF = (cpf: string): boolean => {
+    console.log("CPF original:", cpf);
+
+    if (cpf.length !== 14) {
+      console.log("CPF inválido: comprimento incorreto");
+      return false;
+    }
+
+    const cpfRegex = /^\d{3}\.\d{3}\.\d{3}-\d{2}$/;
+    if (!cpfRegex.test(cpf)) {
+      console.log("CPF inválido: formato incorreto");
+      return false;
+    }
+
+    console.log("CPF formato válido");
+    return true;
+  };
 
   const handleLogin = async () => {
-    if (!email.trim() || !password.trim()) {
+    if (!cpf.trim() || !password.trim()) {
       Alert.alert("Erro", "Por favor, preencha todos os campos.");
       return;
     }
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      Alert.alert("Erro", "Por favor, digite um e-mail válido.");
+    if (!isValidCPF(cpf)) {
+      Alert.alert("Erro", "CPF inválido. Use o formato 123.456.789-00.");
       return;
     }
 
+    const cleanCPF = cpf.replace(/[^\d]/g, '');
+    console.log("CPF limpo enviado para API:", cleanCPF); 
+
     setLoading(true);
     try {
-      const response = await api.post("/login/", { email, password });
+      console.log("Enviando para API:", { cpf: cleanCPF, password }); 
+      const response = await api.post<LoginResponse>("/login/", { cpf: cleanCPF, password });
       const { access, refresh, user } = response.data;
       if (!access || !refresh || !user || !user.role) {
         throw new Error("Resposta da API inválida: dados incompletos.");
@@ -36,11 +70,10 @@ export default function SignIn() {
 
       await AsyncStorage.setItem("accessToken", access);
       await AsyncStorage.setItem("refreshToken", refresh);
-      console.log("Tokens salvos:", { access, refresh }); // Log pra verificar
+      console.log("Tokens salvos:", { access, refresh });
 
       const userRole = user.role.toLowerCase();
-      await saveUserType(email, userRole);
-
+      await saveUserType(cpf, userRole); 
       if (userRole === "admin") {
         router.replace("/manager/home");
       } else if (userRole === "user") {
@@ -51,14 +84,16 @@ export default function SignIn() {
     } catch (error) {
       const axiosError = error as AxiosError<{ error?: string }>;
       if (axiosError.response) {
+        console.log("Erro da API:", axiosError.response.data); 
         if (axiosError.response.status === 401) {
-          Alert.alert("Erro", axiosError.response.data.error || "Credenciais inválidas. Verifique seu e-mail e senha.");
+          Alert.alert("Erro", axiosError.response.data.error || "Credenciais inválidas. Verifique seu CPF e senha.");
         } else if (axiosError.response.status === 400) {
           Alert.alert("Erro", axiosError.response.data.error || "Dados inválidos. Verifique os campos informados.");
         } else {
           Alert.alert("Erro", "Ocorreu um erro ao fazer login. Tente novamente.");
         }
       } else {
+        console.log("Erro de conexão:", axiosError.message); 
         Alert.alert("Erro", axiosError.message || "Não foi possível conectar ao servidor. Verifique sua conexão.");
       }
     } finally {
@@ -73,14 +108,17 @@ export default function SignIn() {
         <Text style={styles.subtitle}>Sistema de Ponto Digital</Text>
 
         <View style={styles.form}>
-          <TextInput
-            placeholder="E-mail"
+          <MaskInput
+            placeholder="CPF"
             placeholderTextColor="#B0B3C7"
-            keyboardType="email-address"
-            autoCapitalize="none"
+            keyboardType="numeric"
             style={styles.input}
-            value={email}
-            onChangeText={setEmail}
+            value={cpf}
+            onChangeText={(masked, unmasked) => {
+              console.log("Masked:", masked, "Unmasked:", unmasked); 
+              setCpf(masked);
+            }}
+            mask={cpfMask}
             editable={!loading}
           />
 
@@ -184,21 +222,6 @@ const styles = StyleSheet.create({
   forgotPasswordText: {
     color: "#F4C542",
     fontWeight: "600",
-    fontSize: 14,
-  },
-  signUpContainer: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginTop: 16,
-    paddingVertical: 8,
-  },
-  noAccountText: {
-    color: "#FFFFFF",
-    fontSize: 14,
-  },
-  signUpText: {
-    color: "#F4C542",
-    fontWeight: "700",
     fontSize: 14,
   },
 });
